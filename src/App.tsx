@@ -34,7 +34,7 @@ function App() {
 
   return (
     <div style={{ padding: '40px', fontFamily: 'Arial' }}>
-      <h1>Vinay Traders</h1>
+   <h1>Vinay Traders - Development Test</h1>
 
       <p>{message}</p>
 
