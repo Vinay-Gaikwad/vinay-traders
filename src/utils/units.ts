@@ -1,0 +1,5 @@
+import type { InventoryBatch, Product } from '../types'
+export function convertUnits(quantity: number, factor: number): number { if (!Number.isFinite(quantity) || quantity < 0 || !Number.isFinite(factor) || factor <= 0) throw new Error('Quantity must be non-negative and conversion factor must be greater than zero.'); return Math.round(quantity * factor * 10000) / 10000 }
+export const convertToSalesUnit = convertUnits
+export function conversionForBatch(product: Pick<Product, 'conversionFactor'>, batch?: Pick<InventoryBatch, 'conversionFactor'>): number { return batch?.conversionFactor ?? product.conversionFactor }
+export function calculateBatchStock(originalPurchaseQty: number, conversionFactor: number, soldQty = 0, wastage = 0) { const convertedQty = convertUnits(originalPurchaseQty, conversionFactor); if (soldQty < 0 || wastage < 0 || soldQty + wastage > convertedQty) throw new Error('Sold quantity and wastage cannot exceed converted stock.'); return { originalPurchaseQty, conversionFactor, convertedQty, soldQty, wastage, remainingQty: Math.round((convertedQty - soldQty - wastage) * 10000) / 10000 } }
