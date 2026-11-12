@@ -110,7 +110,7 @@ export function createPurchase(data: AppData, input: PurchaseInput): AppData {
  if (status === 'Completed' && data.purchases.some(entry => entry.id !== input.id && entry.status === 'Completed' && entry.supplierId === input.supplierId && entry.supplierInvoice.toLowerCase() === input.supplierInvoice.trim().toLowerCase())) throw new Error('This supplier invoice has already been recorded.')
  const oldSupplier = existing ? data.suppliers.find(entry => entry.id === existing.supplierId) : undefined
  const previousBalance = existing && oldSupplier?.id === supplier.id ? Math.max(0, supplier.balance - existing.totals.due) : supplier.balance
- const totals = calculateInvoiceTotals(input.items, { paid: input.paid, previousBalance, roundOff: data.settings.roundOff, interstate: input.interstate, gstEnabled: data.settings.gstEnabled })
+ const totals = calculateInvoiceTotals(input.items, { paid: input.paid, previousBalance, roundOff: data.settings.roundOff, interstate: input.interstate, gstEnabled: false })
  if (status === 'Completed') validatePayment(totals.grandTotal, input.paid, input.paymentMethod, input.payments)
  const next = structuredClone(data), date = input.date ?? new Date().toISOString(), id = input.id ?? uid('purchase')
  const number = existing?.number ?? `PUR-${String(data.purchases.length + 101).padStart(4, '0')}`
