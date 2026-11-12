@@ -1,7 +1,8 @@
 export const roundMoney = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100
 export const formatCurrency = (value: number, decimals = 2): string => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value)
 export const formatNumber = (value: number): string => new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(value)
-export const today = (): string => { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` }
+export const localDateKey = (date: Date): string => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+export const today = (): string => localDateKey(new Date())
 export const appLocale = (): string => {
   if (typeof window !== 'undefined') {
     try {
