@@ -3,11 +3,12 @@ import { initialData } from '../mock-data'
 import type { Attendance, Invoice, LineItem, Payment, PurchaseInput } from '../types'
 import { calculateInvoiceTotals } from '../utils/invoice'
 import { calculatePayroll } from '../utils/payroll'
-import { createInvoiceReturn, createPurchase, recordReturnRefund } from './operations'
+import { adjustStock, createInvoiceReturn, createPurchase, recordReturnRefund } from './operations'
 
 describe('Vinay Traders accounting regressions', () => {
  it('saves a purchase, preserves its supplier attachment, and increases stock once', () => {
   const before = structuredClone(initialData)
+  before.settings.gstEnabled = true // Purchases must still be tax-free in this shop.
   const product = before.products[0]
   const supplier = before.suppliers[0]
   const input: PurchaseInput = {
@@ -24,6 +25,18 @@ describe('Vinay Traders accounting regressions', () => {
   expect(purchase?.attachmentData).toBe(input.attachmentData)
   expect(purchase?.totals.grandTotal).toBe(180)
   expect(updated.products.find(p => p.id === product.id)?.stock).toBe(product.stock + 2 * product.conversionFactor)
+  expect(before.products.find(p => p.id === product.id)?.stock).toBe(product.stock)
+ })
+
+ it('records opening and edited stock as auditable inventory adjustments', () => {
+  const before = structuredClone(initialData)
+  const product = before.products[0]
+  const added = adjustStock(before, product.id, 3, 'Opening stock correction')
+  const after = added.products.find(p => p.id === product.id)
+  expect(after?.stock).toBe(product.stock + 3)
+  expect(added.stockTransactions[0].type).toBe('Adjustment')
+  expect(added.stockTransactions[0].in).toBe(3)
+  expect(added.stockTransactions[0].notes).toBe('Opening stock correction')
   expect(before.products.find(p => p.id === product.id)?.stock).toBe(product.stock)
  })
 
