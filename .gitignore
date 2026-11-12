@@ -30,6 +30,7 @@ dist-ssr
 .tools/
 release/
 /release*/
+/re fin/
 .env.client
 /tmp/
 /android/.gradle/
