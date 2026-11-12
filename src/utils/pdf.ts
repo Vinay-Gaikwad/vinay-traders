@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { logoUrl } from '../assets/brand'
-import type { Payment, Product, Purchase, Supplier, Worker } from '../types'
+import type { Invoice, InvoiceReturn, Payment, Product, Purchase, Supplier, Worker } from '../types'
 import type { calculatePayroll } from './payroll'
 import { formatCurrency, formatDate } from './format'
 
@@ -238,4 +238,63 @@ export async function workerPayslipPdf(
  })
  footer(doc, shop)
  download(doc, 'salary-slip-' + worker.name + '-' + safePeriod)
+}
+/** Original sale and revised sale stacked in order, with a return audit and refund summary. */
+export async function returnComparisonPdf(original: Invoice, revised: Invoice, record: InvoiceReturn, details: ReportDetails) {
+ const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' }), logo = await logoData()
+ const shop = { businessName: 'VINAY TRADERS', address: 'Shirala, Maharashtra', ...details }
+ const { width, margin } = brandHeader(doc, 'BILL RETURN & REVISION', shop, false, logo, record.number)
+ let y = 57
+ const section = (title: string, bill: Invoice, start: number) => {
+  if (start > 235) {
+   doc.addPage()
+   brandHeader(doc, 'BILL RETURN & REVISION', shop, false, logo, record.number)
+   start = 58
+  }
+  doc.setFillColor(...blue)
+  doc.roundedRect(margin, start, width - 2 * margin, 9, 1.5, 1.5, 'F')
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(255,255,255)
+  doc.text(title, margin+4, start+6)
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(35,48,62)
+  const info = 'Bill ' + bill.number + '  |  ' + formatDate(bill.date) + '  |  Customer: ' + bill.customerName
+  doc.text(doc.splitTextToSize(info, width - 2 * margin), margin, start + 15)
+  autoTable(doc, {
+   startY: start+21,
+   head: [['#','Product','Variant','Qty','Unit','Rate','Amount']],
+   body: bill.items.map((item,index)=>[index+1,item.name,item.variant||'—',item.quantity,item.unit,pdfCurrency(item.rate),pdfCurrency(item.quantity*item.rate*(1-(item.discount||0)/100))]),
+   theme:'grid',
+   styles:{fontSize:8,cellPadding:2.3,overflow:'linebreak',lineColor:[209,220,234],lineWidth:.2},
+   headStyles:{fillColor:blue,textColor:[255,255,255]},
+   alternateRowStyles:{fillColor:[245,248,252]},
+   columnStyles:{0:{cellWidth:8},1:{cellWidth:47},2:{cellWidth:31},3:{cellWidth:14,halign:'right'},4:{cellWidth:16},5:{cellWidth:24,halign:'right'},6:{halign:'right'}},
+   margin:{left:margin,right:margin,top:56,bottom:21},
+   showHead:'everyPage',
+   willDrawPage:()=>{if(currentPageNumber(doc)>1) brandHeader(doc,'BILL RETURN & REVISION',shop,false,logo,record.number)}
+  })
+  let totalY = ((doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? start+30)+5
+  if(totalY>245){doc.addPage();brandHeader(doc,'BILL RETURN & REVISION',shop,false,logo,record.number);totalY=58}
+  autoTable(doc, {
+   startY:totalY,
+   body:[['Bill total',pdfCurrency(bill.totals.grandTotal)],['Amount paid',pdfCurrency(bill.totals.paid)],['Amount due',pdfCurrency(bill.totals.due)]],
+   theme:'grid',
+   styles:{fontSize:8.7,cellPadding:2.1,lineColor:[207,219,234],lineWidth:.2},
+   columnStyles:{0:{cellWidth:width-2*margin-50,textColor:blue,fontStyle:'bold'},1:{halign:'right',fontStyle:'bold'}},
+   margin:{left:margin,right:margin}
+  })
+  return ((doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? totalY+18)+10
+ }
+ y = section('ORIGINAL BILL - BEFORE RETURN', original, y)
+ y = section('REVISED BILL - AFTER RETURN', revised, y)
+ if(y>230){doc.addPage();brandHeader(doc,'BILL RETURN & REVISION',shop,false,logo,record.number);y=59}
+ doc.setFillColor(247,249,252);doc.setDrawColor(204,216,230)
+ doc.roundedRect(margin,y,width-2*margin,30,2,2,'FD')
+ doc.setTextColor(...blue);doc.setFont('helvetica','bold');doc.setFontSize(9)
+ doc.text('RETURN & REFUND ACCOUNT',margin+4,y+7)
+ doc.setFont('helvetica','normal');doc.setTextColor(39,52,69)
+ doc.text('Items returned: '+record.items.reduce((sum,item)=>sum+item.quantity,0),margin+4,y+15)
+ doc.text('Return amount: '+pdfCurrency(record.amount),width-margin-4,y+15,{align:'right'})
+ doc.text('Refund recorded: '+pdfCurrency(record.refundPaid??0),margin+4,y+22)
+ doc.text('Refund still due: '+pdfCurrency(Math.max(0,(record.refundDue??0)-(record.refundPaid??0))),width-margin-4,y+22,{align:'right'})
+ footer(doc,shop)
+ download(doc,'return-comparison-'+original.number)
 }
