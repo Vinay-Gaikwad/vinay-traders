@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { logoUrl } from '../assets/brand'
-import type { Invoice, InvoiceReturn, Payment, Product, Purchase, Supplier, Worker } from '../types'
+import type { Invoice, InvoiceReturn, Payment, Product, Purchase, Quotation, Supplier, Worker } from '../types'
 import type { calculatePayroll } from './payroll'
 import { formatCurrency, formatDate } from './format'
 
@@ -297,4 +297,53 @@ export async function returnComparisonPdf(original: Invoice, revised: Invoice, r
  doc.text('Refund still due: '+pdfCurrency(Math.max(0,(record.refundDue??0)-(record.refundPaid??0))),width-margin-4,y+22,{align:'right'})
  footer(doc,shop)
  download(doc,'return-comparison-'+original.number)
+}
+/** A4 vector quotation export with repeated headers; no screenshot slices or GST. */
+export async function quotationPdf(quote: Quotation, details: ReportDetails) {
+ const shop = { businessName: 'VINAY TRADERS', address: 'Shirala, Maharashtra', ...details }
+ const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+ const logo = await logoData()
+ const { width, margin } = brandHeader(doc, 'QUOTATION', shop, false, logo, quote.number)
+ const w = width - 2 * margin
+ doc.setFillColor(247, 250, 254); doc.setDrawColor(204, 215, 231)
+ doc.roundedRect(margin, 55, w, 40, 2, 2, 'FD')
+ doc.setFont('helvetica', 'bold'); doc.setTextColor(...blue); doc.setFontSize(9)
+ doc.text('CUSTOMER', margin + 4, 62)
+ doc.text('QUOTATION DETAILS', margin + w * .52, 62)
+ doc.setFont('helvetica', 'normal'); doc.setFontSize(8.3); doc.setTextColor(39, 52, 69)
+ const customerLines = [quote.customerName || 'Walk-in customer', quote.customerMobile ? 'Mobile: ' + quote.customerMobile : '', quote.customerAddress || ''].filter(Boolean).flatMap(line => doc.splitTextToSize(line, w * .45))
+ doc.text(customerLines.slice(0, 5), margin + 4, 69)
+ ;['Number: ' + quote.number, 'Date: ' + formatDate(quote.date), 'Valid until: ' + formatDate(quote.validUntil), 'Status: ' + quote.status]
+  .forEach((line,i) => doc.text(line, margin + w * .52, 69 + i * 5, { maxWidth: w * .44 }))
+ autoTable(doc, {
+  startY: 101,
+  head: [['Sr.', 'Product', 'Variant / Size', 'Qty', 'Unit', 'Rate', 'Discount', 'Amount']],
+  body: quote.items.map((item,i) => [i+1,item.name,item.variant||'—',item.quantity,item.unit,pdfCurrency(item.rate),String(item.discount||0)+'%',pdfCurrency(item.quantity*item.rate*(1-(item.discount||0)/100))]),
+  theme: 'grid',
+  styles: { fontSize:8,cellPadding:2.1,overflow:'linebreak',lineColor:[208,219,233],lineWidth:.2 },
+  headStyles: { fillColor:blue,textColor:[255,255,255],fontStyle:'bold' },
+  alternateRowStyles: { fillColor:[246,249,253] },
+  columnStyles: {0:{cellWidth:9},1:{cellWidth:40},2:{cellWidth:30},3:{cellWidth:12,halign:'right'},4:{cellWidth:16},5:{cellWidth:22,halign:'right'},6:{cellWidth:16,halign:'right'},7:{halign:'right'}},
+  margin: { left:margin,right:margin,top:56,bottom:19 },
+  showHead: 'everyPage',
+  willDrawPage: () => { if (currentPageNumber(doc)>1) brandHeader(doc,'QUOTATION',shop,false,logo,quote.number) }
+ })
+ let y = ((doc as jsPDF & { lastAutoTable?: { finalY?:number } }).lastAutoTable?.finalY ?? 111)+8
+ const notes=doc.splitTextToSize('Notes: '+(quote.notes||'—'),w*.54)
+ if(y+Math.max(notes.length*4,36)>265){doc.addPage();brandHeader(doc,'QUOTATION',shop,false,logo,quote.number);y=60}
+ doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(55,66,82)
+ doc.text(notes,margin,y+3)
+ const x=width-margin-75
+ autoTable(doc,{
+  startY:y,body:[['Subtotal',pdfCurrency(quote.totals.subtotal)],['Discount',pdfCurrency(quote.totals.discount)],['GRAND TOTAL',pdfCurrency(quote.totals.grandTotal)]],
+  theme:'grid',
+  styles:{fontSize:9,cellPadding:2.7,lineColor:[208,219,233],lineWidth:.2},
+  columnStyles:{0:{cellWidth:36,fontStyle:'bold',textColor:blue},1:{halign:'right',fontStyle:'bold'}},
+  didParseCell:cell=>{if(cell.row.index===2){cell.cell.styles.fillColor=[245,208,130];cell.cell.styles.textColor=blue}},
+  margin:{left:x,right:margin}
+ })
+ const end=Math.max(y+notes.length*4,(doc as jsPDF & {lastAutoTable?:{finalY?:number}}).lastAutoTable?.finalY??y)
+ if(end+18<277){doc.setDrawColor(167,180,198);doc.line(width-margin-62,end+12,width-margin,end+12);doc.setFontSize(7.5);doc.text('Authorized signature',width-margin-31,end+17,{align:'center'})}
+ footer(doc,shop)
+ download(doc,'quotation-'+quote.number)
 }
