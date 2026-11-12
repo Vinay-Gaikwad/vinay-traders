@@ -1,0 +1,21 @@
+.deposit-plan-row{
+ display:grid;
+ grid-template-columns:minmax(180px,1.5fr) minmax(140px,1fr) auto auto;
+ align-items:center;
+ gap:12px;
+ padding:14px;
+ background:#f8fbff;
+ border:1px solid #dbe6f2;
+ border-radius:12px;
+}
+.deposit-plan-row .notice-text{min-width:0}
+.deposit-plan-row .notice-text small{display:block;color:#60738a;margin-top:4px}
+.deposit-plan-rate-field{display:flex;flex-direction:column;gap:5px;font-size:12px;color:#5a6e84}
+.deposit-plan-rate-field input{width:100%;min-width:0;max-width:175px;height:40px;padding:8px 10px;border:1px solid #cddceb;border-radius:9px;color:#17314f;background:white}
+.deposit-plan-active{display:inline-flex;gap:7px;align-items:center;font-size:13px}
+@media(max-width:740px){
+ .deposit-plan-row{grid-template-columns:1fr 1fr;gap:10px}
+ .deposit-plan-row .notice-text{grid-column:1 / -1}
+ .deposit-plan-row .deposit-plan-active{justify-self:end}
+}
+@media(max-width:390px){.deposit-plan-row{grid-template-columns:1fr}.deposit-plan-row .notice-text{grid-column:auto}}
