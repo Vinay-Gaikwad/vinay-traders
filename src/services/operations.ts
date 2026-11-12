@@ -335,16 +335,38 @@ export function setAttendance(data: AppData, entry: Omit<Attendance, 'id'>): App
  return { ...data, attendance: [{ ...entry, id: existing?.id ?? uid('attendance') }, ...data.attendance.filter(item => item.workerId !== entry.workerId || item.date !== entry.date)] }
 }
 export function saveDeposit(data: AppData, entry: Omit<Deposit, 'id'>): AppData {
- finite(entry.expected, 'Expected amount'); finite(entry.paid, 'Paid amount')
- if (!entry.date) throw new Error('Choose a deposit date.')
- if (entry.paid > entry.expected) throw new Error('Deposit cannot exceed the expected amount.')
- if ((entry.status === 'Skipped' || entry.status === 'Holiday') && entry.paid > 0) throw new Error('A skipped or holiday entry cannot have a paid amount.')
+  finite(entry.expected, 'Expected amount')
+  finite(entry.paid, 'Paid amount')
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(entry.date) || Number.isNaN(Date.parse(entry.date + 'T00:00:00'))) {
+    throw new Error('Choose a valid deposit date.')
+  }
+  if ((entry.status === 'Skipped' || entry.status === 'Holiday') && entry.paid > 0) {
+    throw new Error('A skipped or holiday entry cannot have a paid amount.')
+  }
   const plan = data.settings.depositPlans?.find(item => item.id === entry.planId)
+  if (entry.planId && entry.planId !== 'deposit-default' && !plan) {
+    throw new Error('The selected Pat Sanstha deposit plan no longer exists.')
+  }
   const planId = plan?.id ?? entry.planId ?? 'deposit-default'
   const planName = plan?.name ?? entry.planName ?? 'Shop Deposit'
-  const expected = entry.expected || plan?.dailyAmount || data.settings.dailyDeposit
+  // When a plan is selected its amount takes precedence. Avoid comparing
+  // against the form's zero placeholder before resolving the plan.
+  const expected = plan ? plan.dailyAmount : (entry.expected || data.settings.dailyDeposit)
+  finite(expected, 'Expected amount', 0.01)
   if (entry.paid > expected) throw new Error('Deposit cannot exceed the expected amount.')
-  const existing = data.deposits.find(item => item.date === entry.date && (item.planId ?? 'deposit-default') === planId)
-  const status = entry.status === 'Holiday' ? 'Holiday' : entry.paid === 0 ? 'Skipped' : entry.paid < expected ? 'Partial' : 'Paid'
-  return { ...data, deposits: [{ ...entry, expected, planId, planName, status, id: existing?.id ?? uid('deposit') }, ...data.deposits.filter(item => item.id !== existing?.id)] }
+  const existing = data.deposits.find(item =>
+    item.date === entry.date && (item.planId ?? 'deposit-default') === planId
+  )
+  const status: Deposit['status'] = entry.status === 'Holiday'
+    ? 'Holiday'
+    : entry.paid === 0
+      ? 'Skipped'
+      : entry.paid < expected ? 'Partial' : 'Paid'
+  return {
+    ...data,
+    deposits: [
+      { ...entry, expected, planId, planName, status, id: existing?.id ?? uid('deposit') },
+      ...data.deposits.filter(item => item.id !== existing?.id),
+    ],
+  }
 }
