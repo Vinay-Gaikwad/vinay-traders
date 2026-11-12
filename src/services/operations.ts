@@ -57,7 +57,8 @@ export function createInvoice(data: AppData, input: InvoiceInput): AppData {
  if (input.plumberId && (!plumber || plumber.status !== 'Active')) throw new Error('Select an active plumber.')
  const status = input.status ?? 'Completed'
  const previousBalance = existing && customer?.id === existing.customerId ? Math.max(0, (customer?.balance ?? 0) - existing.totals.due) : customer?.balance ?? 0
- const totals = calculateInvoiceTotals(input.items, { paid: input.paid, previousBalance, roundOff: data.settings.roundOff, interstate: input.interstate, gstEnabled: data.settings.gstEnabled })
+ // Vinay Traders is tax-free: legacy settings must never add GST to new customer bills.
+ const totals = calculateInvoiceTotals(input.items, { paid: input.paid, previousBalance, roundOff: data.settings.roundOff, gstEnabled: false })
  if (status === 'Completed') {
   validatePayment(totals.grandTotal, input.paid, input.paymentMethod, input.payments)
   if (totals.due > 0 && !customer) throw new Error('Select or add a customer to record an outstanding balance.')
