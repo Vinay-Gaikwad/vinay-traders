@@ -35,3 +35,6 @@ release/
 /android/.gradle/
 /android/local.properties
 /android/**/build/
+
+# Local Cloudflare state and caches must not be added to Git
+.wrangler/
