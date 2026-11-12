@@ -1,7 +1,8 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { logoUrl } from '../assets/brand'
-import type { Product, Purchase, Supplier } from '../types'
+import type { Payment, Product, Purchase, Supplier, Worker } from '../types'
+import type { calculatePayroll } from './payroll'
 import { formatCurrency, formatDate } from './format'
 
 export type PdfRow = Record<string, string | number | null | undefined>
@@ -136,4 +137,106 @@ export async function productPurchaseReportPdf(products: Product[], details: Rep
  const rows = products.map((product, index) => ({ 'Sr. No.': index + 1, Product: product.name, 'Variant / Size': product.variant || product.size || '—', Qty: product.stock, Unit: product.salesUnit, Rate: pdfCurrency(product.purchaseRate), Amount: pdfCurrency(product.stock * product.purchaseRate) }))
  const totalQuantity = products.reduce((sum, product) => sum + product.stock, 0), totalAmount = products.reduce((sum, product) => sum + product.stock * product.purchaseRate, 0)
  return printPdfReport('Product / Purchase Report', rows, details, { orientation: 'landscape', summary: { 'Total products': products.length, 'Total quantity': totalQuantity, 'Grand total amount': pdfCurrency(totalAmount) } })
+}
+/**
+ * Professional A4 worker salary slip.
+ * The full earned salary remains visible after payment; only unpaid balance
+ * goes to zero. This is a historical accounting document, not an edit form.
+ */
+export async function workerPayslipPdf(
+ worker: Worker,
+ period: string,
+ payroll: ReturnType<typeof calculatePayroll>,
+ payments: Payment[],
+ details: ReportDetails
+) {
+ const shop = { businessName: 'VINAY TRADERS', address: 'Shirala, Maharashtra', ...details }
+ const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+ const logo = await logoData()
+ const { width, margin } = brandHeader(doc, 'SALARY SLIP', shop, false, logo, period)
+ const safePeriod = /^\d{4}-\d{2}$/.test(period) ? period : '—'
+ const paymentRows = payments
+  .filter(row => row.entityType === 'worker' && row.entityId === worker.id && (row.kind ?? 'Payment') === 'Payment' && (row.period ?? row.date.slice(0, 7)) === period)
+  .sort((a, b) => a.date.localeCompare(b.date))
+ const payType = worker.salaryType === 'Monthly Fixed' ? 'Monthly fixed' : 'Daily wage'
+ const detailRows = [
+  ['Worker', worker.name], ['Role', worker.role || '—'],
+  ['Pay period', safePeriod], ['Salary type', payType],
+  ['Attendance', String(payroll.present) + ' present; ' + String(payroll.paidDays) + ' paid days'],
+  ['Payment status', payroll.balance <= .001 ? 'Paid / Settled' : payroll.paid > 0 ? 'Part-paid' : 'Pending']
+ ]
+ autoTable(doc, {
+  startY: 56, body: detailRows,
+  theme: 'grid', styles: { fontSize: 9, cellPadding: 3, lineColor: [214, 226, 240], lineWidth: .2 },
+  columnStyles: { 0: { cellWidth: 43, fillColor: [244, 248, 253], textColor: blue, fontStyle: 'bold' }, 1: { cellWidth: width - 2 * margin - 43 } },
+  margin: { left: margin, right: margin }
+ })
+ let y = ((doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? 98) + 8
+ doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...blue)
+ doc.text('EARNINGS AND ADJUSTMENTS', margin, y)
+ y += 3
+ const payRows: [string, string][] = [
+  ['Basic pay earned', pdfCurrency(payroll.basicPay)],
+  ['Overtime pay', pdfCurrency(payroll.overtimePay)],
+  ['Bonus (including scheduled periods)', pdfCurrency(payroll.bonus)],
+  ['Advance deducted', '- ' + pdfCurrency(payroll.advance)],
+  ['Other deductions', '- ' + pdfCurrency(payroll.deduction)]
+ ]
+ autoTable(doc, {
+  startY: y, body: payRows, theme: 'grid',
+  styles: { fontSize: 9, cellPadding: 3, lineColor: [214, 226, 240], lineWidth: .2 },
+  columnStyles: { 0: { cellWidth: 112 }, 1: { halign: 'right', fontStyle: 'bold' } },
+  alternateRowStyles: { fillColor: [246, 249, 253] },
+  margin: { left: margin, right: margin }
+ })
+ y = ((doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? y) + 7
+ doc.setFillColor(...blue); doc.roundedRect(margin, y, width - 2 * margin, 14, 2, 2, 'F')
+ doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(10)
+ doc.text('NET SALARY EARNED', margin + 5, y + 9)
+ doc.text(pdfCurrency(payroll.netPay), width - margin - 5, y + 9, { align: 'right' })
+ y += 22
+ doc.setTextColor(...blue); doc.setFontSize(11); doc.text('PAYMENTS RECORDED', margin, y)
+ y += 3
+ const paymentTable = paymentRows.length
+  ? paymentRows.map(row => [formatDate(row.date), row.method, row.reference || '—', pdfCurrency(row.amount)])
+  : [['—', '—', 'No payments for this period', pdfCurrency(0)]]
+ autoTable(doc, {
+  startY: y, head: [['Date', 'Method', 'Reference', 'Amount paid']],
+  body: paymentTable, theme: 'grid',
+  styles: { fontSize: 8.5, cellPadding: 2.7, overflow: 'linebreak', lineColor: [214, 226, 240], lineWidth: .2 },
+  headStyles: { fillColor: blue, textColor: [255, 255, 255] },
+  alternateRowStyles: { fillColor: [246, 249, 253] },
+  columnStyles: { 0: { cellWidth: 31 }, 1: { cellWidth: 28 }, 2: { cellWidth: 74 }, 3: { halign: 'right' } },
+  margin: { left: margin, right: margin, top: 56, bottom: 22 },
+  showHead: 'everyPage',
+  willDrawPage: () => {
+   if (currentPageNumber(doc) > 1) brandHeader(doc, 'SALARY SLIP', shop, false, logo, period)
+  }
+ })
+ y = ((doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? y) + 8
+ if (y > 245) {
+  doc.addPage()
+  brandHeader(doc, 'SALARY SLIP', shop, false, logo, period)
+  y = 58
+ }
+ autoTable(doc, {
+  startY: y,
+  body: [
+   ['Total salary earned', pdfCurrency(payroll.netPay)],
+   ['Total paid this period', pdfCurrency(payroll.paid)],
+   ['Remaining salary payable', pdfCurrency(payroll.balance)]
+  ],
+  theme: 'grid',
+  styles: { fontSize: 10, fontStyle: 'bold', cellPadding: 3, lineColor: [214, 226, 240], lineWidth: .2 },
+  columnStyles: { 0: { cellWidth: 112 }, 1: { halign: 'right' } },
+  didParseCell: cell => {
+   if (cell.row.index === 2) {
+    cell.cell.styles.fillColor = payroll.balance <= .001 ? [224, 247, 235] : [255, 243, 219]
+    cell.cell.styles.textColor = payroll.balance <= .001 ? [24, 110, 74] : [159, 92, 0]
+   }
+  },
+  margin: { left: margin, right: margin }
+ })
+ footer(doc, shop)
+ download(doc, 'salary-slip-' + worker.name + '-' + safePeriod)
 }
