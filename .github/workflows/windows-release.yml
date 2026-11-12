@@ -2,6 +2,17 @@ name: Build Windows EXE
 
 on:
   workflow_dispatch:
+    inputs:
+      cloud_sync:
+        description: 'Build the authenticated Supabase-connected Windows edition'
+        required: true
+        type: boolean
+        default: false
+      security_review_complete:
+        description: 'Confirm owner account and member-only RLS were verified before cloud desktop build'
+        required: true
+        type: boolean
+        default: false
   push:
     branches: [main]
     paths:
@@ -19,6 +30,8 @@ jobs:
       # Do not enable live cloud sync until authenticated desktop sync is tested.
       VITE_CLIENT_RELEASE: 'true'
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
     steps:
       - name: Check out Vinay Traders
         uses: actions/checkout@v4
@@ -32,7 +45,16 @@ jobs:
       - name: Run regression tests
         run: npm run test
       - name: Compile Windows NSIS and portable EXE
-        run: npm run desktop:build
+        shell: pwsh
+        run: |
+          if ('${{ inputs.cloud_sync }}' -eq 'true') {
+            if ('${{ inputs.security_review_complete }}' -ne 'true') { throw 'Cloud desktop build blocked: owner/RLS review not confirmed.' }
+            if (-not $env:VITE_SUPABASE_URL -or -not $env:VITE_SUPABASE_PUBLISHABLE_KEY) { throw 'Missing Supabase build variables for cloud desktop.' }
+            $env:VITE_CLIENT_RELEASE = 'false'
+            npm run desktop:cloud:build
+          } else {
+            npm run desktop:build
+          }
       - name: Verify packaged executables
         shell: pwsh
         run: |
