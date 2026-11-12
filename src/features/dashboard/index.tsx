@@ -3,7 +3,7 @@ import { AlertTriangle, Boxes, BriefcaseBusiness, CalendarDays, CircleDollarSign
 import { useNavigate } from 'react-router-dom'
 import { Badge, Button, Card } from '../../components/ui'
 import { useData } from '../../services/data'
-import { formatCurrency, formatDate, today } from '../../utils/format'
+import { formatCurrency, formatDate, localDateKey, today } from '../../utils/format'
 import { printPdfReport, type PdfRow } from '../../utils/pdf'
 
 type Tone = 'blue' | 'green' | 'yellow' | 'red' | 'purple'
@@ -65,7 +65,7 @@ export function DashboardPage() {
     if (exportPeriod === 'Weekly') { start.setDate(end.getDate()-((end.getDay()+6)%7)); start.setHours(0,0,0,0) }
     if (exportPeriod === 'Monthly') { start.setDate(1); start.setHours(0,0,0,0) }
     if (exportPeriod === 'Yearly') { start.setMonth(0,1); start.setHours(0,0,0,0) }
-    const from = start.toISOString().slice(0,10), to = end.toISOString().slice(0,10)
+    const from = localDateKey(start), to = localDateKey(end)
     const inRange = (value: string) => value.slice(0,10) >= from && value.slice(0,10) <= to
     const rows: PdfRow[] = []
     completed.filter(row=>inRange(row.date)).forEach(row=>rows.push({Section:'Bills',Reference:row.number,Date:formatDate(row.date),Details:row.customerName,Quantity:row.items.length,Amount:formatCurrency(row.totals.grandTotal),Status:row.paymentStatus}))
