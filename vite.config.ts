@@ -6,7 +6,7 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig(({ mode }) => ({
   // Native WebViews load the app from file://, while web deployments need
   // root-relative assets so nested routes such as /purchase/new can load.
-  base: mode === 'client' ? './' : '/',
+  base: mode === 'client' || mode === 'cloud-desktop' ? './' : '/',
   // Keep large generated artifacts out of Vite's watcher. Desktop/APK
   // builds write into these folders and can otherwise trigger EBUSY watcher
   // errors that stop the local dev server while the app is being tested.
