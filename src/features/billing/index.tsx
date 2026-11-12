@@ -16,6 +16,7 @@ import { logoUrl } from '../../assets/brand'
 import { LineEditor, PaymentBadge, ProductSearch, TotalsSummary } from './parts'
 import { usePOSStore } from './store'
 import './commerce.css'
+import '../../styles/bill-document.css'
 
 const paymentSchema=z.object({paid:z.number().min(0,'Enter a positive amount'),reference:z.string(),notes:z.string(),cash:z.number().min(0),upi:z.number().min(0),bank:z.number().min(0)})
 type PaymentForm=z.infer<typeof paymentSchema>
