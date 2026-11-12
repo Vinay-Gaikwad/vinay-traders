@@ -42,7 +42,7 @@ export function WorkspaceAuth({ children }: { children: ReactNode }) {
   let active = true
   // Fail closed: the app is accessible only to verified shop members.
   // The RPC is defined by the preparation migration and protected by RLS.
-  void supabase.rpc('vt_has_workspace_access').then(({ data, error: accessError }) => {
+  void Promise.resolve(supabase.rpc('vt_has_workspace_access')).then(({ data, error: accessError }) => {
    if (!active) return
    setAuthorization({
     userId,
