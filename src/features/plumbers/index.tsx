@@ -43,7 +43,7 @@ export function PlumberPage() {
       { key: 'originalBill', label: 'Original bill' },
       { key: 'amount', label: 'Returned value', render: row => currency(row.amount) },
       { key: 'commissionReversed', label: 'Commission reversed', render: row => currency(row.commissionReversed) },
-      { key: 'refundDue', label: 'Customer refund due', render: row => currency(Math.max(0, row.refundDue - row.refundPaid)) },
+      { key: 'refundDue', label: 'Customer refund due', render: row => currency(Math.max(0, (row.refundDue ?? 0) - (row.refundPaid ?? 0))) },
     ]} emptyTitle="No returned referral bills" />
    </Card>}
   {tab === 'Commission ledger' && <Card><div className="people-section-title"><h3>Commission statement</h3><ExportButton rows={ledger} filename={`${plumber.name}-commission.pdf`} title={`${plumber.name} commission statement`} details={data.settings} /></div><DataTable rows={ledger} columns={[{ key: 'date', label: 'Date', render: row => dateLabel(row.date) }, { key: 'number', label: 'Bill' }, { key: 'customer', label: 'Customer' }, { key: 'billValue', label: 'Bill value', render: row => currency(row.billValue) }, { key: 'eligible', label: 'Eligible value', render: row => currency(row.eligible) }, { key: 'rate', label: 'Rate', render: row => `${row.rate}%` }, { key: 'commission', label: 'Commission', render: row => currency(row.commission) }, { key: 'paid', label: 'Paid', render: row => currency(row.paid) }, { key: 'pending', label: 'Pending', render: row => <span className="people-amount-red">{currency(row.pending)}</span> }]} /></Card>}
