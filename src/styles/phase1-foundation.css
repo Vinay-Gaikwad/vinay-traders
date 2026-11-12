@@ -1,0 +1,167 @@
+/*
+ * Vinay Traders | Phase 01 foundation
+ * Shared visual refinement, aligned with the approved navy / cobalt / teal references.
+ * Screen-only: invoice and report print styles remain controlled by their own templates.
+ */
+@media screen {
+  :root {
+    --nav: #102747;
+    --primary: #2563eb;
+    --primary-hover: #1d4ed8;
+    --text: #14263d;
+    --muted: #67798e;
+    --border: #dbe5f0;
+    --surface: #ffffff;
+    --bg: #f4f7fc;
+    --vt-accent: #18aa9d;
+    --vt-gold: #d6962d;
+    --vt-radius-sm: 10px;
+    --vt-radius: 16px;
+    --vt-shadow: 0 7px 28px rgba(16, 39, 71, .055);
+    --vt-focus: 0 0 0 3px rgba(37, 99, 235, .19);
+  }
+
+  body { color: var(--text); background: var(--bg); }
+  .sidebar {
+    background: linear-gradient(180deg, #102747 0%, #0c213f 100%);
+    color: #a9bed3;
+  }
+  .sidebar-nav {
+    min-height: 0;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(175, 204, 234, .45) transparent;
+  }
+  .nav-group { color: #789ab7; letter-spacing: .10em; }
+  .nav-link {
+    min-height: 44px;
+    border-radius: 10px;
+    transition: background-color .15s ease, color .15s ease;
+  }
+  .nav-link:hover { background: rgba(255, 255, 255, .075); color: #fff; }
+  .nav-link.active {
+    background: rgba(54, 189, 166, .17);
+    color: #8ce5d7;
+    box-shadow: inset 3px 0 #38c6b1;
+    font-weight: 650;
+  }
+  .sidebar-bottom { border-color: rgba(185, 211, 238, .15); }
+  .topbar {
+    border-bottom-color: var(--border);
+    box-shadow: 0 1px 2px rgba(20, 42, 68, .025);
+  }
+  .main-content { width: 100%; }
+  .page-stack { gap: 24px; }
+  .page-heading h1 {
+    font-weight: 750;
+    letter-spacing: -.035em;
+    line-height: 1.18;
+  }
+  .page-heading p { line-height: 1.55; }
+  .card {
+    border-color: var(--border);
+    border-radius: var(--vt-radius);
+    box-shadow: var(--vt-shadow);
+    background: var(--surface);
+  }
+  .stat-card { padding: 22px 24px; }
+  .stat-value { font-variant-numeric: tabular-nums; letter-spacing: -.025em; }
+  .button {
+    min-height: 40px;
+    border-radius: var(--vt-radius-sm);
+    font-weight: 650;
+    transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+  }
+  .button-primary {
+    background: var(--primary);
+    border-color: var(--primary);
+    box-shadow: 0 3px 9px rgba(37, 99, 235, .12);
+  }
+  .button-primary:hover {
+    background: var(--primary-hover);
+    border-color: var(--primary-hover);
+    box-shadow: 0 5px 14px rgba(37, 99, 235, .17);
+  }
+  .button-secondary:hover { border-color: #b6c9df; }
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [role='button']:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+    box-shadow: var(--vt-focus);
+  }
+  :is(.field input, .field select, .field textarea, .search-input input, .command-search, .table-toolbar input, .table-toolbar select) {
+    border-radius: var(--vt-radius-sm);
+    font-size: 14px;
+  }
+  :is(.field input, .field select, .field textarea):focus {
+    border-color: var(--primary);
+  }
+  .modal {
+    border-color: var(--border);
+    border-radius: 18px;
+    box-shadow: 0 28px 85px rgba(7, 23, 50, .21);
+  }
+  .modal-header { border-color: var(--border); }
+  .modal-body { overscroll-behavior: contain; }
+  .section-title { min-width: 0; }
+  .section-title h2 { color: var(--text); line-height: 1.3; }
+  .data-table { font-variant-numeric: tabular-nums; }
+  .data-table th {
+    background: #f6f9fd;
+    color: #51657c;
+    font-weight: 700;
+  }
+  .data-table th button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 0;
+    padding: 4px 0;
+    border-radius: 5px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .data-table th button:hover { color: var(--primary); }
+  .data-table td, .data-table th { border-color: #e5ecf4; }
+  .data-table tbody tr:hover { background: #f6faff; }
+  .data-table tbody tr:focus-within { background: #f0f6ff; }
+  .table-toolbar { gap: 12px; }
+  .table-wrap { scrollbar-width: thin; scrollbar-color: #a5b6ca transparent; }
+  .badge { font-weight: 650; }
+  .pagination { color: var(--muted); }
+  .global-search-trigger {
+    border-radius: 11px;
+    border-color: var(--border);
+  }
+  .global-search-trigger:hover { border-color: #a8bddc; background: #f7faff; }
+  .profile-button, .notification-button { border-radius: 10px; }
+  .stat-card-action:hover { transform: translateY(-2px); }
+  .mobile-record { border-radius: var(--vt-radius-sm); }
+  @media (max-width: 1100px) {
+    .stat-card { padding: 18px 20px; }
+    .main-content { max-width: 100%; }
+  }
+  @media (max-width: 700px) {
+    .page-stack { gap: 18px; }
+    .main-content { padding: 20px 14px 32px; }
+    .card { border-radius: 13px; }
+    .stat-card { padding: 16px; }
+    .page-heading h1 { line-height: 1.18; }
+    .table-toolbar { align-items: stretch; }
+    .modal { max-height: calc(100dvh - 28px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      scroll-behavior: auto !important;
+      transition-duration: .01ms !important;
+      animation-duration: .01ms !important;
+      animation-iteration-count: 1 !important;
+    }
+  }
+}
