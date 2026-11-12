@@ -17,6 +17,7 @@ import { printPdfReport, productPurchaseReportPdf, purchaseInvoicePdf, purchaseR
 import { t } from '../../utils/i18n'
 import { MAX_SUPPLIER_INVOICE_BYTES, readSupplierInvoice } from '../../utils/supplier-invoice'
 import { SupplierInvoiceViewer } from '../../components/SupplierInvoiceViewer'
+import '../../styles/deposit-plans.css'
 
 const statusTone = (status:string):'green'|'amber'|'red'|'blue'|'gray' => status==='Active'||status==='Paid'||status==='In Stock'?'green':status==='Low Stock'||status==='Partial'?'amber':status==='Out of Stock'||status==='Skipped'||status==='Due'||status==='Pending'?'red':'gray'
 const ProductStatus = ({product}:{product:Product}) => <Badge tone={statusTone(product.stock<=0?'Out of Stock':product.stock<=product.reorderLevel?'Low Stock':'In Stock')}>{product.stock<=0?'Out of Stock':product.stock<=product.reorderLevel?'Low Stock':'In Stock'}</Badge>
