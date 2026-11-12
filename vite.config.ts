@@ -15,6 +15,7 @@ export default defineConfig(({ mode }) => ({
       ignored: [
         '**/dist/**',
         '**/release/**',
+        '**/re fin/**',
         '**/android/.gradle/**',
         '**/android/app/build/**',
       ],
