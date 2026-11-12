@@ -1,0 +1,82 @@
+import { useMemo, useRef, useState, type RefObject } from 'react'
+import { useNavigate } from 'react-router-dom'
+import html2canvas from 'html2canvas'
+import { jsPDF } from 'jspdf'
+import { CalendarDays, CheckSquare, Download, FileText, IndianRupee, MapPin, Pencil, PenLine, Plus, Printer, Send, Trash2, UserRound } from 'lucide-react'
+import { Badge, Button, Card, EmptyState, Field, Modal, PageHeader, SectionTitle, StatCard, toast } from '../../components/ui'
+import { useData } from '../../services/data'
+import { createQuotation, deleteQuotation } from '../../services/operations'
+import type { LineItem, Product, Quotation, Settings } from '../../types'
+import { formatCurrency, formatDate, today, uid } from '../../utils/format'
+import { calculateInvoiceTotals } from '../../utils/invoice'
+import { logoUrl } from '../../assets/brand'
+import { LineEditor, ProductSearch } from '../billing/parts'
+
+function itemFromProduct(product: Product): LineItem { return { id: uid('quote-line'), productId: product.id, name: product.name, variant: product.variant, hsn: '', quantity: 1, unit: product.salesUnit, rate: product.sellingRate, discount: product.defaultDiscount ?? 0, gst: 0 } }
+function statusTone(status: Quotation['status']): 'green'|'blue'|'amber'|'gray' { return status === 'Accepted' || status === 'Converted' ? 'green' : status === 'Sent' ? 'blue' : status === 'Expired' ? 'amber' : 'gray' }
+
+const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen']
+const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
+function belowHundred(value: number) { return value < 20 ? ones[value] : `${tens[Math.floor(value / 10)]}${value % 10 ? ` ${ones[value % 10]}` : ''}` }
+function belowThousand(value: number) { return value < 100 ? belowHundred(value) : `${ones[Math.floor(value / 100)]} Hundred${value % 100 ? ` ${belowHundred(value % 100)}` : ''}` }
+function amountInWords(value: number) {
+ const amount = Math.max(0, Math.round(value))
+ if (!amount) return 'Rupees Zero Only.'
+ const parts: string[] = []
+ let remainder = amount
+ if (remainder >= 10000000) { parts.push(`${belowThousand(Math.floor(remainder / 10000000))} Crore`); remainder %= 10000000 }
+ if (remainder >= 100000) { parts.push(`${belowThousand(Math.floor(remainder / 100000))} Lakh`); remainder %= 100000 }
+ if (remainder >= 1000) { parts.push(`${belowThousand(Math.floor(remainder / 1000))} Thousand`); remainder %= 1000 }
+ if (remainder) parts.push(belowThousand(remainder))
+ return `Rupees ${parts.join(' ')} Only.`
+}
+
+function QuotationEditor({ quotation, onClose }: { quotation?: Quotation; onClose: () => void }) {
+ const { data, mutate } = useData()
+ const initialCustomer = data.customers.find(customer => customer.id === quotation?.customerId)
+ const [customerId, setCustomerId] = useState(quotation?.customerId ?? '')
+ const [customerName, setCustomerName] = useState(quotation?.customerName ?? initialCustomer?.name ?? '')
+ const [validUntil, setValidUntil] = useState(quotation?.validUntil ?? today())
+ const [notes, setNotes] = useState(quotation?.notes ?? '')
+ const [items, setItems] = useState<LineItem[]>(quotation?.items ?? [])
+ const totals = calculateInvoiceTotals(items, { roundOff: data.settings.roundOff, gstEnabled: false })
+ const customer = data.customers.find(row => row.id === customerId)
+ const save = async (status: Quotation['status'] = 'Draft') => {
+  try { await mutate(current => createQuotation(current, { id: quotation?.id, customerId: customerId || undefined, customerName: customerName || customer?.name || '', customerMobile: customer?.mobile, customerAddress: customer?.address, validUntil, notes, items, status })); toast.success(status === 'Sent' ? 'Quotation marked as sent' : quotation ? 'Quotation updated' : 'Quotation saved'); onClose() } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not save quotation') }
+ }
+ return <div className="quotation-editor"><div className="form-grid"><Field label="Customer"><select value={customerId} onChange={event => { const id = event.target.value; const row = data.customers.find(item => item.id === id); setCustomerId(id); setCustomerName(row?.name ?? '') }}>{<option value="">Walk-in / enter name</option>}{data.customers.map(row => <option key={row.id} value={row.id}>{row.name} · {row.mobile}</option>)}</select></Field><Field label="Customer name"><input value={customerName} onChange={event => setCustomerName(event.target.value)} /></Field><Field label="Valid until"><input type="date" value={validUntil} onChange={event => setValidUntil(event.target.value)} /></Field></div><Card className="quotation-products"><SectionTitle>Add products</SectionTitle><ProductSearch products={data.products} onAdd={product => setItems(current => current.some(item => item.productId === product.id) ? current.map(item => item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item) : [...current, itemFromProduct(product)])} selectedIds={items.map(item => item.productId)} /><LineEditor items={items} products={data.products} onChange={setItems} /></Card><div className="grid-2"><Field label="Notes / terms"><textarea rows={4} value={notes} onChange={event => setNotes(event.target.value)} placeholder="Validity, delivery and payment terms" /></Field><Card><div className="quotation-editor-total"><span>Grand total</span><strong>{formatCurrency(totals.grandTotal)}</strong></div></Card></div><div className="form-actions"><Button onClick={onClose}>Cancel</Button><Button onClick={() => void save('Draft')} disabled={!items.length}>Save draft</Button><Button variant="primary" onClick={() => void save('Sent')} disabled={!items.length}><Send size={15}/>Save and mark sent</Button></div></div>
+}
+
+function QuotationDocument({ quotation, settings, documentRef }: { quotation: Quotation; settings: Settings; documentRef: RefObject<HTMLElement | null> }) {
+ const subtotal = quotation.items.reduce((sum, item) => sum + item.quantity * item.rate, 0)
+ const discount = quotation.items.reduce((sum, item) => sum + item.quantity * item.rate * item.discount / 100, 0)
+ const total = quotation.totals.grandTotal || Math.max(0, subtotal - discount)
+ const terms = ['Delivery: As mutually agreed.', 'Payment: As mutually agreed.', 'Prices subject to confirmation at order placement.']
+ if (quotation.notes.trim()) terms.unshift(quotation.notes.trim())
+ return <article className="quotation-document" ref={documentRef}>
+  <header className="quotation-document-header"><div className="quotation-business-brand"><img src={logoUrl} alt="Vinay Traders logo"/><div><h1>{(settings.businessName || 'VINAY TRADERS').toUpperCase()}</h1><h2>Hardware &amp; Plumbing Supplies</h2><p><MapPin size={15}/> {settings.address || 'Shirala, Maharashtra'}</p></div></div><div className="quotation-brand-accent"/></header>
+  <div className="quotation-title-meta"><div className="quotation-title-banner"><FileText size={28}/><strong>QUOTATION</strong></div><dl className="quotation-meta"><div><dt><FileText size={15}/>Quotation No.</dt><dd>{quotation.number}</dd></div><div><dt><CalendarDays size={15}/>Date</dt><dd>{formatDate(quotation.date)}</dd></div><div><dt><CalendarDays size={15}/>Valid Until</dt><dd>{formatDate(quotation.validUntil)}</dd></div></dl></div>
+  <section className="quotation-for"><div className="quotation-for-icon"><UserRound size={27}/></div><div><span>Quotation For</span><strong>{quotation.customerName || 'Walk-in customer'}</strong><small><MapPin size={14}/> {quotation.customerAddress || 'Shirala, Maharashtra'}</small></div></section>
+  <table className="quotation-document-table"><thead><tr><th>Sr<br/>No.</th><th>Product / Specifications</th><th>Unit</th><th>Qty</th><th>Rate (₹)</th><th>Discount (₹)</th><th>Amount (₹)</th></tr></thead><tbody>{quotation.items.map((item, index) => { const gross = item.quantity * item.rate; const itemDiscount = gross * item.discount / 100; return <tr key={item.id}><td>{index + 1}</td><td><strong>{item.name}</strong>{item.variant && <small>{item.variant}</small>}</td><td>{item.unit}</td><td>{item.quantity}</td><td>{item.rate.toFixed(2)}</td><td>{itemDiscount.toFixed(2)}</td><td>{(gross - itemDiscount).toFixed(2)}</td></tr> })}</tbody></table>
+  <div className="quotation-summary-row"><section className="quotation-words"><h3><IndianRupee size={18}/> Amount in Words</h3><strong>{amountInWords(total)}</strong></section><dl className="quotation-totals"><div><dt>Subtotal</dt><dd>{formatCurrency(subtotal)}</dd></div><div><dt>Discount</dt><dd>{formatCurrency(discount)}</dd></div><div className="quotation-grand-total"><dt>GRAND TOTAL</dt><dd>{formatCurrency(total)}</dd></div></dl></div>
+  <section className="quotation-terms"><h3><FileText size={17}/> Terms &amp; Conditions</h3><ul>{terms.map((term, index) => <li key={`${term}-${index}`}>{term}</li>)}</ul></section>
+  <div className="quotation-signatures"><section><h3><CheckSquare size={17}/> Acceptance</h3><p>I / We hereby accept the above quotation<br/>with the terms and conditions mentioned.</p><div className="signature-line">Customer Signature</div></section><section><h3><PenLine size={17}/> Authorized Signatory</h3><div className="signature-line signature-line-spaced">Authorized Signatory</div></section></div>
+  <footer className="quotation-document-footer">This is a quotation, not a bill.</footer>
+ </article>
+}
+
+function QuotationDetails({ quotation, onClose, onEdit, onDelete }: { quotation: Quotation; onClose: () => void; onEdit: () => void; onDelete: () => void }) {
+ const navigate = useNavigate(); const { data } = useData(); const documentRef = useRef<HTMLElement>(null); const [downloading, setDownloading] = useState(false)
+ const download = async () => { if (!documentRef.current) return; setDownloading(true); try { const canvas = await html2canvas(documentRef.current, { scale: 2, useCORS: true, backgroundColor: '#fff' }); const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' }); const margin = 7; const width = 210 - margin * 2; const height = canvas.height * width / canvas.width; const image = canvas.toDataURL('image/png'); const printableHeight = 297 - margin * 2; let offset = 0; while (offset < height) { if (offset > 0) pdf.addPage(); pdf.addImage(image, 'PNG', margin, margin - offset, width, height); offset += printableHeight } pdf.save(`${quotation.number}-quotation.pdf`); toast.success('Quotation PDF downloaded') } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not create quotation PDF') } finally { setDownloading(false) } }
+ return <Modal open onClose={onClose} title={`${quotation.number} · quotation`} wide className="quotation-detail-modal"><QuotationDocument quotation={quotation} settings={data.settings} documentRef={documentRef}/><div className="form-actions no-print"><Button onClick={() => void download()} disabled={downloading}><Download size={15}/>{downloading ? 'Preparing PDF…' : 'Download PDF'}</Button><Button onClick={() => window.print()}><Printer size={15}/>Print quotation</Button>{quotation.status !== 'Converted' && <Button onClick={onEdit}><Pencil size={15}/>Edit</Button>}{quotation.status !== 'Converted' && <Button variant="danger" onClick={onDelete}><Trash2 size={15}/>Delete</Button>}<Button onClick={() => { onClose(); navigate(`/billing?quote=${quotation.id}`) }}><FileText size={15}/>Convert to bill</Button><Button variant="primary" onClick={onClose}>Close</Button></div></Modal>
+}
+
+export function QuotationsPage() {
+ const { data, mutate } = useData(); const [open, setOpen] = useState(false); const [editing, setEditing] = useState<Quotation>(); const [selected, setSelected] = useState<Quotation>(); const [deleteTarget, setDeleteTarget] = useState<Quotation>(); const [search, setSearch] = useState(''); const [from, setFrom] = useState(''); const [to, setTo] = useState('')
+ const total = useMemo(() => data.quotations.reduce((sum, quote) => sum + quote.totals.grandTotal, 0), [data.quotations])
+ const filteredQuotations = data.quotations.filter(quote => `${quote.number} ${quote.customerName} ${quote.customerMobile ?? ''}`.toLowerCase().includes(search.toLowerCase()) && (!from || quote.date.slice(0,10) >= from) && (!to || quote.date.slice(0,10) <= to))
+ const beginNew = () => { setEditing(undefined); setOpen(true) }
+ const beginEdit = (quotation: Quotation) => { setSelected(undefined); setEditing(quotation); setOpen(true) }
+ const remove = async () => { if (!deleteTarget) return; try { await mutate(current => deleteQuotation(current, deleteTarget.id)); toast.success(`${deleteTarget.number} deleted`); setDeleteTarget(undefined) } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not delete quotation') } }
+ return <div className="page-stack"><PageHeader title="Quotations" description="Prepare professional customer quotations with fixed product rates and editable discounts." actions={<Button variant="primary" onClick={beginNew}><Plus size={16}/>New quotation</Button>} /><div className="grid-3"><StatCard label="Total quotations" value={data.quotations.length} detail="Saved in this workspace" icon={<FileText size={17}/>}/><StatCard label="Open value" value={formatCurrency(total)} detail="Across all quotations" icon={<Send size={17}/>}/><StatCard label="Accepted" value={data.quotations.filter(quote => quote.status === 'Accepted' || quote.status === 'Converted').length} detail="Ready to convert" icon={<FileText size={17}/>}/></div><Card><SectionTitle>Quotation register</SectionTitle><div className="table-toolbar"><input aria-label="Search quotations by customer or number" placeholder="Search by quotation no. or customer…" value={search} onChange={event=>setSearch(event.target.value)}/><label>From <input aria-label="Quotation from date" type="date" value={from} onChange={event=>setFrom(event.target.value)}/></label><label>To <input aria-label="Quotation to date" type="date" value={to} onChange={event=>setTo(event.target.value)}/></label></div>{filteredQuotations.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Number</th><th>Date</th><th>Customer</th><th>Valid until</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead><tbody>{filteredQuotations.map(quote => <tr key={quote.id} onClick={() => setSelected(quote)} className="clickable-row"><td><strong>{quote.number}</strong></td><td>{formatDate(quote.date)}</td><td>{quote.customerName}</td><td>{formatDate(quote.validUntil)}</td><td className="amount-highlight">{formatCurrency(quote.totals.grandTotal)}</td><td><Badge tone={statusTone(quote.status)}>{quote.status}</Badge></td><td><div className="quotation-row-actions"><Button variant="ghost" aria-label={`Open ${quote.number}`} title="Open quotation" onClick={event => { event.stopPropagation(); setSelected(quote) }}><FileText size={16}/></Button>{quote.status !== 'Converted' && <><Button variant="ghost" aria-label={`Edit ${quote.number}`} title="Edit quotation" onClick={event => { event.stopPropagation(); beginEdit(quote) }}><Pencil size={16}/></Button><Button variant="danger" aria-label={`Delete ${quote.number}`} title="Delete quotation" onClick={event => { event.stopPropagation(); setDeleteTarget(quote) }}><Trash2 size={16}/></Button></>}</div></td></tr>)}</tbody></table></div> : <EmptyState title="No quotations match" description="Adjust the customer search or date range." action={<Button variant="primary" onClick={beginNew}><Plus size={15}/>Create quotation</Button>}/>}</Card><Modal open={open} onClose={() => { setOpen(false); setEditing(undefined) }} title={editing ? `Edit ${editing.number}` : 'New quotation'} wide><QuotationEditor quotation={editing} onClose={() => { setOpen(false); setEditing(undefined) }}/></Modal>{selected && <QuotationDetails quotation={selected} onClose={() => setSelected(undefined)} onEdit={() => beginEdit(selected)} onDelete={() => setDeleteTarget(selected)}/>}<Modal open={!!deleteTarget} onClose={() => setDeleteTarget(undefined)} title="Delete quotation"><p className="muted">Delete {deleteTarget?.number} for {deleteTarget?.customerName}? This action cannot be undone.</p><div className="form-actions"><Button onClick={() => setDeleteTarget(undefined)}>Cancel</Button><Button variant="danger" onClick={() => void remove()}><Trash2 size={15}/>Delete quotation</Button></div></Modal></div>
+}

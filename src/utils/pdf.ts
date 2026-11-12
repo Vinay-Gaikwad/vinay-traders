@@ -1,0 +1,139 @@
+import { jsPDF } from 'jspdf'
+import autoTable from 'jspdf-autotable'
+import { logoUrl } from '../assets/brand'
+import type { Product, Purchase, Supplier } from '../types'
+import { formatCurrency, formatDate } from './format'
+
+export type PdfRow = Record<string, string | number | null | undefined>
+type ReportDetails = { businessName?: string; address?: string; mobile?: string; email?: string; gstin?: string }
+const safeFilename = (value: string) => value.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'report'
+const displayValue = (value: unknown) => value === null || value === undefined || value === '' ? '—' : String(value).replace(/₹\s?/gu, 'Rs. ')
+// jsPDF's built-in Helvetica does not contain the Indian rupee glyph. Use an
+// explicit currency label in exported PDFs so print and preview always agree.
+const pdfCurrency = (value: number) => formatCurrency(value).replace(/^₹\s*/u, 'Rs. ')
+const blue: [number, number, number] = [11, 43, 83]
+const orange: [number, number, number] = [242, 139, 18]
+
+async function logoData(): Promise<string | undefined> {
+ try {
+  const response = await fetch(logoUrl)
+  if (!response.ok) return undefined
+  const blob = await response.blob()
+  return await new Promise(resolve => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => resolve(undefined); reader.readAsDataURL(blob) })
+ } catch { return undefined }
+}
+
+function brandHeader(doc: jsPDF, title: string, details: ReportDetails, landscape: boolean, logo?: string, meta = '') {
+ const width = doc.internal.pageSize.getWidth(), margin = 13
+ doc.setFillColor(...blue); doc.rect(0, 0, width, 48, 'F')
+ doc.setFillColor(...orange); doc.rect(0, 48, width, 1.4, 'F')
+ if (logo) { try { doc.addImage(logo, 'PNG', margin, 4.5, 23, 23, undefined, 'FAST') } catch { /* allow exports if the logo is not a PNG */ } }
+ const x = logo ? 41 : margin
+ doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(17); doc.text(details.businessName || 'VINAY TRADERS', x, 12)
+ doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.text('Hardware & Plumbing Supplies', x, 18)
+ const detailsWidth = Math.max(35, width - x - margin - width * .33 - 5)
+ const businessLines = [details.address, details.mobile, details.email].filter((line): line is string => Boolean(line)).flatMap(line => doc.splitTextToSize(line, detailsWidth))
+ doc.setFontSize(6.7); doc.text(businessLines.slice(0, 6), x, 24)
+ if (details.gstin) doc.text(`GSTIN: ${details.gstin}`, x, 44)
+ doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text(title.toUpperCase(), width - margin, 12, { align: 'right', maxWidth: width * .33 })
+ doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(meta || `Generated ${new Date().toLocaleString('en-IN')}`, width - margin, 22, { align: 'right' })
+ return { width, margin, startY: landscape ? 56 : 54 }
+}
+
+function footer(doc: jsPDF, details: ReportDetails) {
+ const total = doc.getNumberOfPages()
+ for (let page = 1; page <= total; page++) {
+  doc.setPage(page); const width = doc.internal.pageSize.getWidth(), height = doc.internal.pageSize.getHeight()
+  doc.setDrawColor(205, 215, 227); doc.setLineWidth(.25); doc.line(13, height - 10, width - 13, height - 10)
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(92, 105, 122)
+  doc.text(`${details.businessName || 'Vinay Traders'}  ·  Computer generated document`, 13, height - 6)
+  doc.text(`Page ${page} of ${total}`, width - 13, height - 6, { align: 'right' })
+ }
+}
+
+function currentPageNumber(doc: jsPDF) {
+ return (doc.internal as unknown as { getCurrentPageInfo: () => { pageNumber: number } }).getCurrentPageInfo().pageNumber
+}
+
+function download(doc: jsPDF, title: string) { doc.save(`${safeFilename(title)}-${new Date().toISOString().slice(0, 10)}.pdf`) }
+
+/** Download a branded A4 landscape register with repeated table headings and readable values. */
+export async function printPdfReport(title: string, rows: PdfRow[], details?: ReportDetails, options: { orientation?: 'portrait' | 'landscape'; summary?: PdfRow; outputName?: string } = {}) {
+ const shop = { businessName: 'VINAY TRADERS', address: 'Shirala, Maharashtra', ...details }
+ const orientation = options.orientation ?? 'landscape'
+ const doc = new jsPDF({ orientation, unit: 'mm', format: 'a4' }), logo = await logoData()
+ const { width, margin, startY } = brandHeader(doc, title, shop, orientation === 'landscape', logo)
+ const columns = Object.keys(rows[0] ?? {})
+ if (columns.length) autoTable(doc, { startY, head: [columns], body: rows.map(row => columns.map(column => displayValue(row[column]))), styles: { fontSize: orientation === 'landscape' ? 8 : 8.5, cellPadding: 2.2, overflow: 'linebreak', textColor: [31, 41, 55], lineColor: [205, 215, 227], lineWidth: .2 }, headStyles: { fillColor: blue, textColor: [255, 255, 255], fontStyle: 'bold' }, alternateRowStyles: { fillColor: [245, 248, 252] }, margin: { left: margin, right: margin, top: startY, bottom: 16 }, didParseCell: cell => { if (cell.section !== 'body' || columns[cell.column.index] !== 'Status') return; const status = String(cell.cell.raw ?? '').toLowerCase(); if (['paid', 'settled', 'success'].includes(status)) { cell.cell.styles.fillColor = [226, 248, 234]; cell.cell.styles.textColor = [22, 112, 67] } else if (['partial', 'pending'].includes(status)) { cell.cell.styles.fillColor = [255, 244, 218]; cell.cell.styles.textColor = [153, 93, 0] } else if (['due', 'unpaid', 'credit'].includes(status)) { cell.cell.styles.fillColor = [255, 232, 232]; cell.cell.styles.textColor = [165, 36, 36] } }, theme: 'grid', showHead: 'everyPage', willDrawPage: () => { if (currentPageNumber(doc) > 1) brandHeader(doc, title, shop, orientation === 'landscape', logo) } })
+ else { doc.setTextColor(91, 100, 114); doc.setFontSize(11); doc.text('No records found for this report.', margin, startY + 5) }
+ if (options.summary && Object.keys(options.summary).length) {
+  const y = (doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? startY
+  const pageHeight = doc.internal.pageSize.getHeight()
+  let summaryY = y + 4
+  if (summaryY + Object.keys(options.summary).length * 7 > pageHeight - 18) {
+   doc.addPage()
+   brandHeader(doc, title, shop, orientation === 'landscape', logo)
+   summaryY = startY
+  }
+  autoTable(doc, { startY: summaryY, body: Object.entries(options.summary).map(([key, value]) => [key, displayValue(value)]), theme: 'plain', styles: { fontSize: 9, cellPadding: 2.5, fontStyle: 'bold' }, columnStyles: { 0: { cellWidth: width * .27, textColor: blue }, 1: { halign: 'right' } }, margin: { left: margin, right: margin } })
+ }
+ footer(doc, shop); download(doc, options.outputName ?? title)
+}
+
+/** A4 portrait supplier purchase invoice, with clear supplier, products, payment and totals sections. */
+export async function purchaseInvoicePdf(purchase: Purchase, supplier: Supplier | undefined, details: ReportDetails) {
+ const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' }), logo = await logoData()
+ const shop = { businessName: 'VINAY TRADERS', address: 'Shirala, Maharashtra', ...details }, { width, margin } = brandHeader(doc, 'Purchase Invoice', shop, false, logo, `Purchase ${purchase.number}  ·  ${formatDate(purchase.invoiceDate || purchase.date)}`)
+ const cardTop = 55, half = (width - 2 * margin - 5) / 2
+ doc.setDrawColor(198, 211, 227); doc.setFillColor(246, 249, 253); doc.roundedRect(margin, cardTop, half, 34, 2, 2, 'FD'); doc.roundedRect(margin + half + 5, cardTop, half, 34, 2, 2, 'FD')
+ doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...blue); doc.text('SUPPLIER DETAILS', margin + 3, cardTop + 6); doc.text('PURCHASE DETAILS', margin + half + 8, cardTop + 6)
+ doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(35, 48, 62)
+ const left = [supplier?.name || 'Supplier not available', supplier?.mobile ? `Mobile: ${supplier.mobile}` : '', supplier?.address || '', supplier?.gstin ? `GSTIN: ${supplier.gstin}` : ''].filter(Boolean)
+ const right = [`Purchase No.: ${purchase.number}`, `Supplier invoice: ${purchase.supplierInvoice || '—'}`, `Invoice date: ${formatDate(purchase.invoiceDate || purchase.date)}`, `Due date: ${formatDate(purchase.dueDate)}`, `Payment type: ${purchase.paymentMethod}`, `Status: ${Number(purchase.totals?.due) <= 0 ? 'Paid' : Number(purchase.totals?.paid) > 0 ? 'Partial' : 'Due'}`]
+ left.forEach((line, i) => doc.text(line, margin + 3, cardTop + 12 + i * 5, { maxWidth: half - 7 }))
+ right.forEach((line, i) => doc.text(line, margin + half + 8, cardTop + 12 + i * 4.4, { maxWidth: half - 7 }))
+ const items = Array.isArray(purchase.items) ? purchase.items : []
+ autoTable(doc, { startY: cardTop + 40, head: [['Sr.', 'Product', 'Variant / Size', 'Qty', 'Unit', 'Rate', 'Discount', 'Amount']], body: items.map((item, i) => [i + 1, item.name, item.variant || '—', item.quantity, item.unit, pdfCurrency(item.rate), `${item.discount || 0}%`, pdfCurrency(item.quantity * item.rate * (1 - (item.discount || 0) / 100))]), styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak', lineColor: [205, 215, 227], lineWidth: .2 }, headStyles: { fillColor: blue, textColor: [255, 255, 255], fontStyle: 'bold' }, alternateRowStyles: { fillColor: [246, 249, 253] }, columnStyles: { 0: { cellWidth: 9 }, 1: { cellWidth: 39 }, 2: { cellWidth: 30 }, 3: { cellWidth: 13, halign: 'right' }, 4: { cellWidth: 14 }, 5: { cellWidth: 23, halign: 'right' }, 6: { cellWidth: 18, halign: 'right' }, 7: { halign: 'right' } }, margin: { left: margin, right: margin, top: 54, bottom: 16 }, showHead: 'everyPage', willDrawPage: () => { if (currentPageNumber(doc) > 1) brandHeader(doc, 'Purchase Invoice', shop, false, logo, `Purchase ${purchase.number}  ·  ${formatDate(purchase.invoiceDate || purchase.date)}`) } })
+ let y = ((doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? 100) + 7
+ const totals = purchase.totals ?? { subtotal: 0, discount: 0, grandTotal: 0, paid: 0, due: 0 }
+ if (y > 245) { doc.addPage(); brandHeader(doc, 'Purchase Invoice', shop, false, logo, `Purchase ${purchase.number}  ·  ${formatDate(purchase.invoiceDate || purchase.date)}`); y = 60 }
+ const x = width - margin - 77
+ doc.setDrawColor(198, 211, 227); doc.roundedRect(x, y, 77, 40, 2, 2)
+ const summary = [['Subtotal', totals.subtotal], ['Discount', totals.discount], ['Grand total', totals.grandTotal], ['Paid', totals.paid], ['Due', totals.due]] as const
+ summary.forEach(([label, amount], i) => { const yy = y + 7 + i * 6.4; if (label === 'Grand total') { doc.setFillColor(...orange); doc.roundedRect(x + .4, yy - 4.4, 76.2, 6.6, 1, 1, 'F') }; doc.setFont('helvetica', label === 'Grand total' ? 'bold' : 'normal'); doc.setFontSize(8.5); doc.setTextColor(...(label === 'Grand total' ? blue : [35, 48, 62] as [number, number, number])); doc.text(label, x + 4, yy); doc.text(pdfCurrency(amount), x + 73, yy, { align: 'right' }) })
+ doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(70, 80, 93)
+ const remarksLines = doc.splitTextToSize(`Remarks: ${purchase.notes || '—'}`, width - 2 * margin)
+ let remarksY = y + 48
+ if (remarksY + remarksLines.length * 4 > 250) { doc.addPage(); brandHeader(doc, 'Purchase Invoice', shop, false, logo, `Purchase ${purchase.number}  ·  ${formatDate(purchase.invoiceDate || purchase.date)}`); remarksY = 60 }
+ doc.text(remarksLines, margin, remarksY)
+ const signatureY = 264, lineWidth = (width - 2 * margin - 24) / 2
+ doc.setDrawColor(128, 141, 159); doc.line(margin, signatureY, margin + lineWidth, signatureY); doc.line(width - margin - lineWidth, signatureY, width - margin, signatureY)
+ doc.setFontSize(7.5); doc.setTextColor(70, 80, 93); doc.text('Prepared by: Vinay Traders', margin + lineWidth / 2, signatureY + 5, { align: 'center' }); doc.text('Authorized signature', width - margin - lineWidth / 2, signatureY + 5, { align: 'center' })
+ footer(doc, shop); download(doc, `purchase-invoice-${purchase.number}`)
+}
+
+export async function purchaseRegisterPdf(rows: PdfRow[], details: ReportDetails) {
+ const sum = (key: string) => rows.reduce((total, row) => total + (Number(row[key]) || 0), 0)
+ const printableRows = rows.map((row, index) => {
+  const paid = Number(row.Paid) || 0, due = Number(row.Due) || 0
+  return {
+   'Sr. No.': row['Sr. No.'] ?? index + 1,
+   'Purchase No.': row['Purchase No.'] ?? '—',
+   Date: row.Date ?? '—',
+   Supplier: row.Supplier ?? '—',
+   'Supplier Invoice No.': row['Supplier Invoice No.'] ?? '—',
+   'Items Count': row['Items Count'] ?? 0,
+   'Grand total': pdfCurrency(Number(row['Grand total']) || 0),
+   Paid: pdfCurrency(paid),
+   Due: pdfCurrency(due),
+   Status: due <= 0 ? 'Paid' : paid > 0 ? 'Partial' : 'Due',
+  }
+ })
+ return printPdfReport('Purchase Register', printableRows, details, { orientation: 'landscape', summary: { 'Total records': rows.length, 'Total amount': pdfCurrency(sum('Grand total')), 'Total paid': pdfCurrency(sum('Paid')), 'Total due': pdfCurrency(sum('Due')) } })
+}
+
+export async function productPurchaseReportPdf(products: Product[], details: ReportDetails) {
+ const rows = products.map((product, index) => ({ 'Sr. No.': index + 1, Product: product.name, 'Variant / Size': product.variant || product.size || '—', Qty: product.stock, Unit: product.salesUnit, Rate: pdfCurrency(product.purchaseRate), Amount: pdfCurrency(product.stock * product.purchaseRate) }))
+ const totalQuantity = products.reduce((sum, product) => sum + product.stock, 0), totalAmount = products.reduce((sum, product) => sum + product.stock * product.purchaseRate, 0)
+ return printPdfReport('Product / Purchase Report', rows, details, { orientation: 'landscape', summary: { 'Total products': products.length, 'Total quantity': totalQuantity, 'Grand total amount': pdfCurrency(totalAmount) } })
+}

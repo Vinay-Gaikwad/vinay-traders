@@ -22,3 +22,16 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.env
+.env.local
+.env.*.local
+
+# Native build outputs and local toolchains
+.tools/
+release/
+/release*/
+.env.client
+/tmp/
+/android/.gradle/
+/android/local.properties
+/android/**/build/
