@@ -35,7 +35,6 @@ function brandHeader(doc: jsPDF, title: string, details: ReportDetails, landscap
  const detailsWidth = Math.max(35, width - x - margin - width * .33 - 5)
  const businessLines = [details.address, details.mobile, details.email].filter((line): line is string => Boolean(line)).flatMap(line => doc.splitTextToSize(line, detailsWidth))
  doc.setFontSize(6.7); doc.text(businessLines.slice(0, 6), x, 24)
- if (details.gstin) doc.text(`GSTIN: ${details.gstin}`, x, 44)
  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text(title.toUpperCase(), width - margin, 12, { align: 'right', maxWidth: width * .33 })
  doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(meta || `Generated ${new Date().toLocaleString('en-IN')}`, width - margin, 22, { align: 'right' })
  return { width, margin, startY: landscape ? 56 : 54 }
@@ -89,7 +88,7 @@ export async function purchaseInvoicePdf(purchase: Purchase, supplier: Supplier 
  doc.setDrawColor(198, 211, 227); doc.setFillColor(246, 249, 253); doc.roundedRect(margin, cardTop, half, 34, 2, 2, 'FD'); doc.roundedRect(margin + half + 5, cardTop, half, 34, 2, 2, 'FD')
  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...blue); doc.text('SUPPLIER DETAILS', margin + 3, cardTop + 6); doc.text('PURCHASE DETAILS', margin + half + 8, cardTop + 6)
  doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(35, 48, 62)
- const left = [supplier?.name || 'Supplier not available', supplier?.mobile ? `Mobile: ${supplier.mobile}` : '', supplier?.address || '', supplier?.gstin ? `GSTIN: ${supplier.gstin}` : ''].filter(Boolean)
+ const left = [supplier?.name || 'Supplier not available', supplier?.mobile ? `Mobile: ${supplier.mobile}` : '', supplier?.address || ''].filter(Boolean)
  const right = [`Purchase No.: ${purchase.number}`, `Supplier invoice: ${purchase.supplierInvoice || '—'}`, `Invoice date: ${formatDate(purchase.invoiceDate || purchase.date)}`, `Due date: ${formatDate(purchase.dueDate)}`, `Payment type: ${purchase.paymentMethod}`, `Status: ${Number(purchase.totals?.due) <= 0 ? 'Paid' : Number(purchase.totals?.paid) > 0 ? 'Partial' : 'Due'}`]
  left.forEach((line, i) => doc.text(line, margin + 3, cardTop + 12 + i * 5, { maxWidth: half - 7 }))
  right.forEach((line, i) => doc.text(line, margin + half + 8, cardTop + 12 + i * 4.4, { maxWidth: half - 7 }))
