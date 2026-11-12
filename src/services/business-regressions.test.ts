@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { initialData } from '../mock-data'
-import type { Attendance } from '../types'
+import type { Attendance, Invoice, LineItem } from '../types'
 import { calculatePayroll } from '../utils/payroll'
-import { createExpense, createInvoice, saveDeposit, setAttendance } from './operations'
+import { calculateInvoiceTotals } from '../utils/invoice'
+import { createExpense, createInvoice, createInvoiceReturn, saveDeposit, setAttendance } from './operations'
 
 describe('Vinay Traders phase 04–16 accounting regressions', () => {
  it('calculates a new customer bill without GST even when legacy settings contain tax', () => {
@@ -87,4 +88,33 @@ describe('Vinay Traders phase 04–16 accounting regressions', () => {
   expect(revised.attendance).toHaveLength(3)
   expect(calculatePayroll(worker, revised.attendance, { workingDays: 26, period: '2026-11', payments: [] }).bonus).toBe(62.5)
  })
+ it('preserves paid plumber commission history and carries excess forward after a customer return', () => {
+  const before = structuredClone(initialData)
+  const product = before.products[0]
+  const partner = before.plumbers[0]
+  expect(partner).toBeDefined()
+  const line: LineItem = { id: 'referral-line', productId: product.id, name: product.name,
+   variant: product.variant, hsn: '', quantity: 2, unit: product.salesUnit, rate: 100, discount: 0, gst: 0 }
+  const totals = calculateInvoiceTotals([line], { paid: 200, roundOff: false })
+  const invoice: Invoice = { id: 'referral-original', number: 'VT-REFERRAL-01', date: '2026-11-12',
+   customerName: 'Referral buyer', plumberId: partner.id, items: [line], totals, initialPaid: 200,
+   paymentMethod: 'UPI', paymentStatus: 'Paid', status: 'Completed',
+   commission: 6, commissionRate: 3, commissionBasis: 'invoice-total', notes: '', createdBy: 'Test' }
+  before.settings.excludedProductIds = []
+  before.settings.excludedCategories = []
+  before.settings.commissionBasis = 'invoice-total'
+  before.invoices = [invoice]
+  before.invoiceReturns = []
+  before.plumbers = before.plumbers.map(row => row.id === partner.id
+   ? { ...row, commissionEarned: 6, commissionPaid: 6, referralSales: 200, rewardRate: 0, rewardBalance: 0, bills: 1 }
+   : row)
+  const updated = createInvoiceReturn(before, invoice.id, [{ lineId: line.id, quantity: 1 }], true)
+  const adjustedPartner = updated.plumbers.find(row => row.id === partner.id)!
+  expect(updated.invoiceReturns[0].commissionReversed).toBe(3)
+  expect(adjustedPartner.commissionEarned).toBe(3)
+  expect(adjustedPartner.commissionPaid).toBe(6)
+  expect(Math.max(0, adjustedPartner.commissionPaid - adjustedPartner.commissionEarned)).toBe(3)
+  expect(updated.invoices.find(row => row.id === invoice.id)?.status).toBe('Revised')
+ })
+
 })
