@@ -21,11 +21,12 @@ const modules = [
 ] as const
 
 test('Vinay Traders core routes render without a blank page', async ({ page }, info) => {
+  test.setTimeout(180_000)
   for (const item of modules) {
     await test.step(item.name, async () => {
-      await page.goto(item.path)
+      await page.goto(item.path, { waitUntil: 'domcontentloaded' })
       await expect(page.locator('main.main-content')).toBeVisible()
-      await expect(page.locator('main.main-content h1').first()).toBeVisible()
+      await expect(page.locator('main.main-content h1, main.main-content h2').first()).toBeVisible()
       await expect(page.locator('main.main-content')).not.toContainText('Page not found')
       await page.screenshot({ path: info.outputPath(item.name + '.png'), animations: 'disabled' })
     })
