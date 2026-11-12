@@ -8,6 +8,11 @@ on:
       - '.github/workflows/ui-smoke.yml'
       - 'tests/e2e/**'
       - 'playwright.config.ts'
+      - 'src/**'
+
+concurrency:
+  group: smoke-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
