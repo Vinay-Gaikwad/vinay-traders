@@ -8,6 +8,8 @@ The frontend is a React + TypeScript + Vite application. It currently runs with 
 
 The backend team should replace the local data adapter with authenticated API calls. The UI routes, components, calculations, and form behavior can stay in place.
 
+The current connected implementation uses Supabase tables prefixed with `vt_` so it does not overwrite the original scaffold's `public.products` table. `vt_app_state` is the authoritative aggregate for the single connected workspace; the normalized `vt_*` tables are maintained as the reporting and migration target for server-side transactional endpoints.
+
 ## Frontend file structure
 
 ```text
@@ -320,4 +322,4 @@ The server response should include the generated invoice number, server-calculat
 
 ## Current local/demo limitation
 
-`src/lib/supabase.ts` is only a client scaffold and the existing Supabase migrations cover a products table plus a temporary public read policy. It is not the completed production schema. The backend team must add authentication, tenant/branch scoping, all tables above, server-side rules, and restrictive RLS policies before production use.
+`src/lib/supabase.ts` now connects through `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`. The linked project has the `vt_*` schema plus the aggregate `vt_app_state` table. The current first-workspace policies allow anon access because the UI does not yet have a sign-in screen; replace them with authenticated tenant/branch-scoped RLS policies before public production use.

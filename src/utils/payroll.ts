@@ -13,9 +13,20 @@ export function calculatePayroll(worker: Worker, attendance: Attendance[], optio
  const adjustments = (options.payments ?? []).filter(payment => payment.entityType === 'worker' && payment.entityId === worker.id && (!options.period || payment.period === options.period))
  const includeBaseline = !options.period || worker.adjustmentPeriod === options.period
  const adjustment = (kind: Payment['kind'], initial: number) => roundMoney((includeBaseline ? initial : 0) + adjustments.filter(payment => payment.kind === kind).reduce((sum, payment) => sum + payment.amount, 0))
- const bonus = adjustment('Bonus', worker.bonus), advance = adjustment('Advance', worker.advance), deduction = adjustment('Deduction', worker.deduction)
+ const periodStart = options.period ? `${options.period}-01` : ''
+ const periodEnd = options.period ? `${options.period}-31` : '9999-12-31'
+ const scheduledBonus = roundMoney((worker.bonusPeriods ?? []).reduce((total, schedule) => {
+  if (!Number.isFinite(schedule.perDay) || schedule.perDay <= 0) return total
+  const from = schedule.from > periodStart ? schedule.from : periodStart
+  const to = schedule.to < periodEnd ? schedule.to : periodEnd
+  if (from > to) return total
+  const eligibleDays = entries.filter(entry => entry.date >= from && entry.date <= to && ['Present', 'Half Day', 'Paid Leave'].includes(entry.status)).reduce((sum, entry) => sum + (entry.status === 'Half Day' ? .5 : 1), 0)
+  return total + eligibleDays * schedule.perDay
+ }, 0))
+ const bonus = roundMoney(adjustment('Bonus', worker.bonus) + scheduledBonus), advance = adjustment('Advance', worker.advance), deduction = adjustment('Deduction', worker.deduction)
  const netPay = roundMoney(Math.max(0, basicPay + overtimePay + bonus - advance - deduction))
- const paid = roundMoney(options.paid ?? 0)
+ const recordedPayments = (options.payments ?? []).filter(payment => payment.entityType === 'worker' && payment.entityId === worker.id && (payment.kind ?? 'Payment') === 'Payment' && (!options.period || (payment.period ?? payment.date.slice(0, 7)) === options.period))
+ const paid = roundMoney(options.paid ?? recordedPayments.reduce((sum, payment) => sum + payment.amount, 0))
  return { present, absent, halfDays, paidLeave, unpaidLeave, weeklyOff, overtime, paidDays, basicPay, bonus, advance, deduction, overtimePay, netPay, paid, balance: roundMoney(Math.max(0, netPay - paid)) }
 }
 

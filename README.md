@@ -1,5 +1,29 @@
 # React + TypeScript + Vite
 
+## Run locally
+
+```powershell
+npm install
+npm run dev
+```
+
+Open `http://127.0.0.1:5173`.
+
+The frontend is connected to Supabase when `.env.local` contains:
+
+```env
+VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=your-supabase-publishable-key
+```
+
+Apply the database migrations with:
+
+```powershell
+npx supabase db push --linked
+```
+
+See [BACKEND_HANDOFF.md](./BACKEND_HANDOFF.md) for the route, API, and database contract.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:
