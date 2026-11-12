@@ -142,9 +142,10 @@ export function createPurchase(data: AppData, input: PurchaseInput): AppData {
  return next
 }
 export function createInvoiceReturn(data: AppData, invoiceId: string, returnedItems: { lineId: string; quantity: number }[], restock: boolean, notes = ''): AppData {
- const invoice = data.invoices.find(entry => entry.id === invoiceId && (entry.status === 'Completed' || entry.status === 'Revised'))
+ const invoice = data.invoices.find(entry => entry.id === invoiceId && entry.status === 'Completed')
  if (!invoice) throw new Error('Completed invoice not found.')
  if (!returnedItems.length) throw new Error('Select at least one item to return.')
+ if (new Set(returnedItems.map(item => item.lineId)).size !== returnedItems.length) throw new Error('A bill line can only be returned once in the same operation.')
  const next = structuredClone(data), date = new Date().toISOString(), returned: InvoiceReturnItem[] = []
  for (const selection of returnedItems) {
   finite(selection.quantity, 'Return quantity', .0001)
@@ -166,12 +167,14 @@ export function createInvoiceReturn(data: AppData, invoiceId: string, returnedIt
  const updatedId = uid('invoice')
  const commission = invoice.plumberId ? commissionForItems(remainingItems, totals, invoice.commissionRate, next.settings, next.products) : 0
  const commissionReversed = roundMoney(Math.max(0, invoice.commission - commission))
- const returnRecord: InvoiceReturn = { id: uid('return'), number: returnNumber, originalInvoiceId: invoice.id, updatedInvoiceId: updatedId, date, items: returned, amount: returnedAmount, restocked: restock, commissionReversed, notes: notes.trim() }
+ const refundDue = roundMoney(Math.max(0, invoice.totals.paid - paidForNewBill))
+ const returnRecord: InvoiceReturn = { id: uid('return'), number: returnNumber, originalInvoiceId: invoice.id, updatedInvoiceId: updatedId, date, items: returned, amount: returnedAmount, restocked: restock, commissionReversed, refundDue, refundPaid: 0, notes: notes.trim() }
  if (restock) for (const line of returned) {
   const product = next.products.find(entry => entry.id === line.productId)
   if (!product) continue
   const stock = roundMoney(product.stock + line.quantity)
-  next.products = next.products.map(entry => entry.id === product.id ? { ...entry, stock } : entry)
+  const returnedBatch = { id: uid('batch'), batchNumber: `${returnNumber}-${line.invoiceLineId}`, productId: product.id, date, originalPurchaseQty: line.quantity, purchaseUnit: product.salesUnit, conversionFactor: 1, convertedQty: line.quantity, salesUnit: product.salesUnit, soldQty: 0, remainingQty: line.quantity, purchaseRate: product.purchaseRate }
+  next.products = next.products.map(entry => entry.id === product.id ? { ...entry, stock, batches: [...entry.batches, returnedBatch] } : entry)
   next.stockTransactions.unshift({ id: uid('stock'), productId: product.id, date, type: 'Sale Return', reference: returnNumber, in: line.quantity, out: 0, balance: stock, unit: line.unit, location: product.warehouse, user: 'Vinay Gaikwad', notes: `Returned from ${invoice.number}` })
  }
  const updatedInvoice = { ...invoice, id: updatedId, number: `${invoice.number}-R${relatedReturns + 1}`, date, items: remainingItems.map(item => ({ ...item, id: uid('line') })), totals, initialPaid: totals.paid, paymentStatus: paymentStatus(totals.grandTotal, totals.paid, invoice.paymentMethod), commission, notes: `${invoice.notes}${invoice.notes ? '\n' : ''}Revised after return ${returnNumber}.`, status: 'Completed' as const }
