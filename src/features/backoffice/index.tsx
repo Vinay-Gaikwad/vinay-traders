@@ -36,27 +36,91 @@ function DateInput({ value, onChange, ariaLabel }: { value: string; onChange: (v
 }
 
 function ProductEditor({product,onClose}:{product?:Product;onClose:()=>void}) {
- const {data,mutate}=useData()
- const categoryOptions=[...new Set([...data.products.map(item=>item.category),product?.category??''].filter(Boolean))].sort((a,b)=>a.localeCompare(b))
- const form=useForm({resolver:zodResolver(z.object({name:z.string().min(2),brand:z.string().min(2),category:z.string().min(2),size:z.string().min(1),unit:z.string().min(1),supplierId:z.string().min(1),purchaseRate:z.coerce.number().positive(),sellingRate:z.coerce.number().positive(),stock:z.coerce.number().min(0),reorderLevel:z.coerce.number().min(0),defaultDiscount:z.coerce.number().min(0).max(100)})),defaultValues:{name:product?.name??'',brand:product?.brand??'Finolex',category:product?.category??categoryOptions[0]??'',size:product?.size??'',unit:product?.salesUnit??'Piece',supplierId:product?.supplierId??data.suppliers[0]?.id??'',purchaseRate:product?.purchaseRate??0,sellingRate:product?.sellingRate??0,stock:product?.stock??0,reorderLevel:product?.reorderLevel??10,defaultDiscount:product?.defaultDiscount??0}})
- const purchaseRate=Number(form.watch('purchaseRate'))||0, sellingRate=Number(form.watch('sellingRate'))||0, discount=Number(form.watch('defaultDiscount'))||0
- const sellingAfterDiscount=sellingRate*(1-discount/100), margin=sellingAfterDiscount-purchaseRate, marginPercent=purchaseRate>0?margin/purchaseRate*100:0
-  return <form className="form-grid" onSubmit={form.handleSubmit(async value=>{try{if(!data.suppliers.some(supplier=>supplier.id===value.supplierId))throw new Error('Select a supplier for this product.');if(product) await mutate(current=>({...current,products:current.products.map(item=>item.id===product.id?{...item,name:value.name,brand:value.brand,category:value.category,size:value.size,variant:`${value.size} · —`,salesUnit:value.unit as Unit,purchaseUnit:value.unit as Unit,baseUnit:value.unit as Unit,purchaseRate:value.purchaseRate,sellingRate:value.sellingRate,mrp:value.sellingRate,defaultDiscount:value.defaultDiscount,stock:value.stock,reorderLevel:value.reorderLevel,supplierId:value.supplierId,minimumSellingPrice:value.purchaseRate*1.05}:item)})); else await mutate(current=>({...current,products:[{id:uid('product'),name:value.name,brand:value.brand,category:value.category,size:value.size,variant:`${value.size} · —`,attributes:{size:value.size},subcategory:value.category,productFamily:value.name,sku:`VT-${Date.now().toString().slice(-6)}`,barcode:'',hsn:'3917',gst:0,defaultDiscount:value.defaultDiscount,purchaseUnit:value.unit as Unit,salesUnit:value.unit as Unit,baseUnit:value.unit as Unit,conversionFactor:1,purchaseRate:value.purchaseRate,sellingRate:value.sellingRate,mrp:value.sellingRate,minimumSellingPrice:value.purchaseRate*1.05,stock:value.stock,reserved:0,reorderLevel:value.reorderLevel,minimumStock:0,rack:'NEW',shelf:'',warehouse:'Shirala shop',supplierId:value.supplierId,images:[],notes:'',status:'Active',batches:[]} ,...current.products]}));toast.success(product?'Product updated':'Product added');onClose()}catch(error){toast.error(error instanceof Error?error.message:'Unable to save product')}})}>
-  <Field label="Product name"><input {...form.register('name')} />{form.formState.errors.name&&<small className="field-error">{String(form.formState.errors.name.message)}</small>}</Field>
-  <Field label="Brand"><input {...form.register('brand')} /></Field>
-  <Field label="Category"><select {...form.register('category')}><option value="">Select a category</option>{categoryOptions.map(category=><option key={category} value={category}>{category}</option>)}</select></Field>
-  <Field label="Supplier"><select {...form.register('supplierId')}><option value="">Select a supplier</option>{data.suppliers.map(supplier=><option key={supplier.id} value={supplier.id}>{supplier.name} · {supplier.mobile}</option>)}</select></Field>
-  <Field label="Size / variant"><input {...form.register('size')} /></Field>
-  <Field label="Selling unit"><select {...form.register('unit')}><option>Piece</option><option>Meter</option><option>Box</option><option>KG</option></select></Field>
-  <Field label="Purchase rate"><input type="number" step=".01" {...form.register('purchaseRate')} /></Field>
-  <Field label="Selling rate"><input type="number" step=".01" {...form.register('sellingRate')} /></Field>
-  <Field label="Default discount %"><input type="number" min="0" max="100" step=".01" {...form.register('defaultDiscount')} /></Field>
-  <Field label="Stock"><input type="number" step=".01" {...form.register('stock')} /></Field>
-  <Field label="Reorder level"><input type="number" step=".01" {...form.register('reorderLevel')} /></Field>
-  <div className="info-banner product-margin-preview">Margin after {discount}% discount: <strong>{formatCurrency(margin)}</strong><span>{marginPercent.toFixed(1)}% on purchase rate</span></div>
-  <div className="form-actions"><Button type="button" onClick={onClose}>Cancel</Button><Button variant="primary" type="submit"><Save size={15}/>Save product</Button></div>
+  const {data,mutate}=useData()
+  const suggestedCategories=['Pipes & Fittings','Bathroom & Sanitary','Taps & Valves','Locks & Security','Hand Tools','Power Tools','Fasteners','Electrical','Paints & Adhesives','General Hardware','Other']
+  const categoryOptions=[...new Set([...data.products.map(item=>item.category),...suggestedCategories,product?.category??''].filter(Boolean))].sort((a,b)=>a.localeCompare(b))
+  const schema=z.object({
+    name:z.string().trim().min(2),brand:z.string().trim().min(2),
+    category:z.string().min(2),size:z.string().min(1),unit:z.string().min(1),
+    supplierId:z.string().min(1),purchaseRate:z.coerce.number().nonnegative(),
+    sellingRate:z.coerce.number().nonnegative(),stock:z.coerce.number().min(0),
+    reorderLevel:z.coerce.number().min(0),defaultDiscount:z.coerce.number().min(0).max(100),
+  })
+  const form=useForm({resolver:zodResolver(schema),defaultValues:{
+    name:product?.name??'',brand:product?.brand??'',category:product?.category??categoryOptions[0]??'General Hardware',
+    size:product?.size??'',unit:product?.salesUnit??'Piece',supplierId:product?.supplierId??data.suppliers[0]?.id??'',
+    purchaseRate:product?.purchaseRate??0,sellingRate:product?.sellingRate??0,
+    stock:product?.stock??0,reorderLevel:product?.reorderLevel??10,defaultDiscount:product?.defaultDiscount??0,
+  }})
+  const purchaseRate=Number(form.watch('purchaseRate'))||0
+  const sellingRate=Number(form.watch('sellingRate'))||0
+  const discount=Number(form.watch('defaultDiscount'))||0
+  const netSelling=sellingRate*(1-discount/100)
+  const margin=netSelling-purchaseRate
+  const marginPercent=purchaseRate>0?margin/purchaseRate*100:0
+  const save=async (value:z.infer<typeof schema>)=>{
+    try{
+      if(!data.suppliers.some(supplier=>supplier.id===value.supplierId))throw new Error('Select a valid supplier.')
+      await mutate(current=>{
+        if(product){
+          const existing=current.products.find(item=>item.id===product.id)
+          if(!existing)throw new Error('Product no longer exists.')
+          const next={...current,products:current.products.map(item=>item.id===product.id?{
+            ...item,name:value.name,brand:value.brand,category:value.category,size:value.size,
+            variant:`${value.size} · —`,salesUnit:value.unit as Unit,
+            purchaseUnit:value.unit as Unit,baseUnit:value.unit as Unit,
+            purchaseRate:value.purchaseRate,sellingRate:value.sellingRate,mrp:value.sellingRate,
+            defaultDiscount:value.defaultDiscount,reorderLevel:value.reorderLevel,
+            supplierId:value.supplierId,minimumSellingPrice:value.purchaseRate*1.05,
+          }:item)}
+          const delta=value.stock-existing.stock
+          return Math.abs(delta)>0.000001
+            ? adjustStock(next,product.id,delta,'Stock change from product editor')
+            : next
+        }
+        const id=uid('product')
+        const newProduct:Product={
+          id,name:value.name,brand:value.brand,category:value.category,size:value.size,
+          variant:`${value.size} · —`,attributes:{size:value.size},subcategory:value.category,
+          productFamily:value.name,sku:`VT-${id.slice(-8).toUpperCase()}`,barcode:'',hsn:'',gst:0,
+          defaultDiscount:value.defaultDiscount,purchaseUnit:value.unit as Unit,
+          salesUnit:value.unit as Unit,baseUnit:value.unit as Unit,conversionFactor:1,
+          purchaseRate:value.purchaseRate,sellingRate:value.sellingRate,mrp:value.sellingRate,
+          minimumSellingPrice:value.purchaseRate*1.05,stock:0,reserved:0,
+          reorderLevel:value.reorderLevel,minimumStock:0,rack:'NEW',shelf:'',
+          warehouse:'Shirala shop',supplierId:value.supplierId,images:[],notes:'',
+          status:'Active',batches:[],
+        }
+        const next={...current,products:[newProduct,...current.products]}
+        return value.stock>0?adjustStock(next,id,value.stock,'Opening stock entered when creating product'):next
+      })
+      toast.success(product?'Product updated':'Product added')
+      onClose()
+    }catch(error){toast.error(error instanceof Error?error.message:'Unable to save product')}
+  }
+  return <form className="form-grid" onSubmit={form.handleSubmit(save)}>
+    <Field label="Product name"><input required {...form.register('name')}/></Field>
+    <Field label="Brand"><input required {...form.register('brand')}/></Field>
+    <Field label="Category"><select {...form.register('category')}><option value="">Select category</option>{categoryOptions.map(category=><option key={category} value={category}>{category}</option>)}</select></Field>
+    <Field label="Supplier"><select {...form.register('supplierId')}><option value="">Select supplier</option>{data.suppliers.map(supplier=><option key={supplier.id} value={supplier.id}>{supplier.name} · {supplier.mobile}</option>)}</select></Field>
+    <Field label="Size / variant"><input required {...form.register('size')}/></Field>
+    <Field label="Selling unit"><select {...form.register('unit')}><option>Piece</option><option>Meter</option><option>Box</option><option>KG</option></select></Field>
+    <Field label="Purchase rate"><input type="number" min="0" step=".01" {...form.register('purchaseRate')}/></Field>
+    <Field label="Selling rate"><input type="number" min="0" step=".01" {...form.register('sellingRate')}/></Field>
+    <Field label="Default discount %"><input type="number" min="0" max="100" step=".01" {...form.register('defaultDiscount')}/></Field>
+    <Field label={product?'Current stock (ledger adjustment)':'Opening stock'}><input type="number" min="0" step=".01" {...form.register('stock')}/></Field>
+    <Field label="Reorder level"><input type="number" min="0" step=".01" {...form.register('reorderLevel')}/></Field>
+    <div className="info-banner product-margin-preview">
+      <span>Effective selling price: <strong>{formatCurrency(netSelling)}</strong></span>
+      <span>Margin after {discount}% discount: <strong>{formatCurrency(margin)}</strong></span>
+      <span>{marginPercent.toFixed(1)}% on purchase rate</span>
+      {margin<0&&<span role="alert">Warning: selling at the selected discount creates a loss.</span>}
+    </div>
+    {product&&<p className="muted">Changing stock records an adjustment in the stock ledger. Previous purchase and sales history remains unchanged.</p>}
+    {Object.keys(form.formState.errors).length>0&&<p className="field-error" role="alert">Correct the highlighted product fields before saving.</p>}
+    <div className="form-actions"><Button type="button" onClick={onClose}>Cancel</Button><Button variant="primary" type="submit"><Save size={15}/>Save product</Button></div>
   </form>
- }
+}
 
 export function InventoryPage(){const {data}=useData();const navigate=useNavigate();const location=useLocation();const [open,setOpen]=useState(location.pathname.endsWith('/new')),[filter,setFilter]=useState('All products'),[supplierFilter,setSupplierFilter]=useState('');const rows=data.products.filter(product=>(!supplierFilter||product.supplierId===supplierFilter)&&(filter==='All products'||(filter==='Low stock'?product.stock<=product.reorderLevel&&product.stock>0:filter==='Out of stock'?product.stock<=0:product.category===filter)));const categories=[...new Set(data.products.map(product=>product.category))];return <div className="page-stack"><PageHeader title="Inventory" description="Product variants, stock levels and pricing in one view." actions={<><Button onClick={()=>navigate('/inventory/ledger')}><ClipboardList size={15}/>Stock ledger</Button><Button onClick={()=>void productPurchaseReportPdf(rows,data.settings)}>Export product report</Button><Button onClick={()=>navigate('/inventory/pricing')}><SlidersHorizontal size={15}/>Pricing & discounts</Button><Button onClick={()=>navigate('/inventory/barcodes')}><BarcodeIcon size={15}/>Barcodes</Button><Button variant="primary" onClick={()=>setOpen(true)}><Plus size={16}/>Add product</Button></>}/><div className="grid-4"><StatCard label="Products" value={data.products.length} detail={`${data.products.filter(p=>p.status==='Active').length} active variants`} icon={<Package size={17}/>}/><StatCard label="Inventory value" value={formatCurrency(data.products.reduce((sum,p)=>sum+p.stock*p.purchaseRate,0))} detail="At purchase rate" icon={<IndianRupee size={17}/>}/><StatCard label="Low stock" value={data.products.filter(p=>p.stock>0&&p.stock<=p.reorderLevel).length} detail="Need replenishment" icon={<AlertTriangle size={17}/>} onClick={()=>setFilter('Low stock')}/><StatCard label="Out of stock" value={data.products.filter(p=>p.stock<=0).length} detail="Unavailable to sell" icon={<X size={17}/>} onClick={()=>setFilter('Out of stock')}/></div><Card><div className="section-title"><h2>Product catalogue <span className="muted">({rows.length})</span></h2><div className="toolbar"><select aria-label="Filter by supplier" value={supplierFilter} onChange={e=>setSupplierFilter(e.target.value)}><option value="">All suppliers</option>{data.suppliers.map(supplier=><option key={supplier.id} value={supplier.id}>{supplier.name} · {supplier.mobile}</option>)}</select><select aria-label="Inventory filter" value={filter} onChange={e=>setFilter(e.target.value)}><option>All products</option><option>Low stock</option><option>Out of stock</option>{categories.map(category=><option key={category}>{category}</option>)}</select></div></div><DataTable rows={rows} searchKeys={['name','brand','sku','category','size','barcode']} exportTitle="Inventory" exportDetails={data.settings} onRowClick={row=>navigate(`/inventory/products/${row.id}`)} columns={[{key:'name',label:'Product',render:row=><div><strong>{row.name}</strong><small>{row.brand} · {row.sku}</small></div>},{key:'category',label:'Category'},{key:'variant',label:'Variant'},{key:'supplierId',label:'Supplier',render:row=>{const supplier=data.suppliers.find(s=>s.id===row.supplierId);return supplier?<div><strong>{supplier.name}</strong><small>{supplier.mobile}</small></div>:'—'}},{key:'stock',label:'Available',render:row=><span className="mono">{row.stock} {row.salesUnit}</span>},{key:'purchaseRate',label:'Purchase rate',render:row=><span className="neutral-amount">{formatCurrency(row.purchaseRate)}</span>},{key:'sellingRate',label:'Selling rate',render:row=><span className="amount-highlight">{formatCurrency(row.sellingRate)}</span>},{key:'discount',label:'Discount',render:row=><span className="discount-highlight">{row.defaultDiscount ?? 0}%</span>},{key:'barcode',label:'Barcode',render:row=><span className="mono">{row.barcode || row.barcodes?.[0]?.value || '—'}</span>},{key:'status',label:'Status',render:row=><ProductStatus product={row}/>}]}/></Card><Modal open={open} onClose={()=>setOpen(false)} title="Add product" wide><ProductEditor onClose={()=>setOpen(false)}/></Modal></div>}
 
