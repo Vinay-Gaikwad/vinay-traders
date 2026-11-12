@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState, type RefObject } from 'react'
 import { useNavigate } from 'react-router-dom'
-import html2canvas from 'html2canvas'
-import { jsPDF } from 'jspdf'
+import { quotationPdf } from '../../utils/pdf'
 import { CalendarDays, CheckSquare, Download, FileText, IndianRupee, MapPin, Pencil, PenLine, Plus, Printer, Send, Trash2, UserRound } from 'lucide-react'
 import { Badge, Button, Card, EmptyState, Field, Modal, PageHeader, SectionTitle, StatCard, toast } from '../../components/ui'
 import { useData } from '../../services/data'
@@ -67,7 +66,7 @@ function QuotationDocument({ quotation, settings, documentRef }: { quotation: Qu
 
 function QuotationDetails({ quotation, onClose, onEdit, onDelete }: { quotation: Quotation; onClose: () => void; onEdit: () => void; onDelete: () => void }) {
  const navigate = useNavigate(); const { data } = useData(); const documentRef = useRef<HTMLElement>(null); const [downloading, setDownloading] = useState(false)
- const download = async () => { if (!documentRef.current) return; setDownloading(true); try { const canvas = await html2canvas(documentRef.current, { scale: 2, useCORS: true, backgroundColor: '#fff' }); const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' }); const margin = 7; const width = 210 - margin * 2; const height = canvas.height * width / canvas.width; const image = canvas.toDataURL('image/png'); const printableHeight = 297 - margin * 2; let offset = 0; while (offset < height) { if (offset > 0) pdf.addPage(); pdf.addImage(image, 'PNG', margin, margin - offset, width, height); offset += printableHeight } pdf.save(`${quotation.number}-quotation.pdf`); toast.success('Quotation PDF downloaded') } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not create quotation PDF') } finally { setDownloading(false) } }
+ const download = async () => { setDownloading(true); try { await quotationPdf(quotation,data.settings); toast.success('Quotation PDF downloaded') } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not create quotation PDF') } finally { setDownloading(false) } }
  return <Modal open onClose={onClose} title={`${quotation.number} · quotation`} wide className="quotation-detail-modal"><QuotationDocument quotation={quotation} settings={data.settings} documentRef={documentRef}/><div className="form-actions no-print"><Button onClick={() => void download()} disabled={downloading}><Download size={15}/>{downloading ? 'Preparing PDF…' : 'Download PDF'}</Button><Button onClick={() => window.print()}><Printer size={15}/>Print quotation</Button>{quotation.status !== 'Converted' && <Button onClick={onEdit}><Pencil size={15}/>Edit</Button>}{quotation.status !== 'Converted' && <Button variant="danger" onClick={onDelete}><Trash2 size={15}/>Delete</Button>}<Button onClick={() => { onClose(); navigate(`/billing?quote=${quotation.id}`) }}><FileText size={15}/>Convert to bill</Button><Button variant="primary" onClick={onClose}>Close</Button></div></Modal>
 }
 
