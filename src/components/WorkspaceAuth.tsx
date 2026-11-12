@@ -18,12 +18,13 @@ export function WorkspaceAuth({ children }: { children: ReactNode }) {
  const [password, setPassword] = useState('')
  const [busy, setBusy] = useState(false)
  const [error, setError] = useState('')
+ const [authorization, setAuthorization] = useState<{ userId: string; allowed: boolean; error: string } | null>(null)
 
  useEffect(() => {
   if (!supabaseConfigured || !supabase) return
   let active = true
   const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, current) => {
-   if (active) setSession(current)
+   if (active) { setAuthorization(null); setSession(current) }
   })
   void supabase.auth.getSession().then(({ data, error: authError }) => {
    if (!active) return
@@ -34,6 +35,25 @@ export function WorkspaceAuth({ children }: { children: ReactNode }) {
   }).finally(() => { if (active) setLoading(false) })
   return () => { active = false; subscription.unsubscribe() }
  }, [])
+
+ useEffect(() => {
+  if (!supabaseConfigured || !supabase || !session?.user.id) return
+  const userId = session.user.id
+  let active = true
+  // Fail closed: the app is accessible only to verified shop members.
+  // The RPC is defined by the preparation migration and protected by RLS.
+  void supabase.rpc('vt_has_workspace_access').then(({ data, error: accessError }) => {
+   if (!active) return
+   setAuthorization({
+    userId,
+    allowed: !accessError && data === true,
+    error: accessError ? 'Workspace authorization has not been configured or is unavailable. Contact the shop administrator.' : data === true ? '' : 'This account is not a member of the Vinay Traders workspace.',
+   })
+  }).catch(() => {
+   if (active) setAuthorization({ userId, allowed: false, error: 'Unable to verify workspace membership.' })
+  })
+  return () => { active = false }
+ }, [session?.user.id])
 
  async function signIn(event: FormEvent<HTMLFormElement>) {
   event.preventDefault()
@@ -53,7 +73,14 @@ export function WorkspaceAuth({ children }: { children: ReactNode }) {
 
  if (!supabaseConfigured) return <>{children}</>
  if (loading) return <main className="vt-auth-screen"><div className="vt-auth-card" role="status"><p>Checking secure workspace access…</p></div></main>
- if (session) return <>{children}</>
+ if (session && authorization?.userId !== session.user.id) return <main className="vt-auth-screen"><div className="vt-auth-card" role="status"><p>Verifying shop membership…</p></div></main>
+ if (session && authorization?.allowed) return <>{children}</>
+ if (session) return <main className="vt-auth-screen"><div className="vt-auth-card">
+  <div className="vt-auth-brand"><img src={logoUrl} alt="Vinay Traders"/><div><h1>VINAY TRADERS</h1><p>Hardware & Plumbing Supplies</p></div></div>
+  <div className="vt-auth-heading"><LockKeyhole size={24} aria-hidden="true"/><h2>Workspace access restricted</h2></div>
+  <p className="vt-auth-error" role="alert">{authorization?.error || 'Your account is not authorized.'}</p>
+  <button className="vt-auth-submit" type="button" onClick={() => void supabase?.auth.signOut()}>Sign out</button>
+ </div></main>
 
  return <main className="vt-auth-screen">
   <div className="vt-auth-card">
