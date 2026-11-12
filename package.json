@@ -80,7 +80,7 @@
     "productName": "Vinay Traders",
     "copyright": "Vinay Traders",
     "directories": {
-      "output": "release"
+      "output": "re fin"
     },
     "files": [
       "dist/**/*",
