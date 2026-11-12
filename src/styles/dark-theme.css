@@ -1,0 +1,120 @@
+/* Vinay Traders | dark mode for app screens only; never alter printed bills. */
+@media screen {
+ :root[data-theme="dark"] {
+  color-scheme: dark;
+  --nav: #081b32;
+  --primary: #6594ff;
+  --primary-hover: #84aaff;
+  --text: #ecf3ff;
+  --muted: #a6b9d0;
+  --border: #2c405a;
+  --surface: #162740;
+  --bg: #0c192b;
+  --vt-accent: #4ad0bd;
+  --vt-gold: #e2ad55;
+  --vt-shadow: 0 8px 28px rgba(1, 7, 18, .32);
+ }
+ :root[data-theme="dark"] body { color: var(--text); background: var(--bg); }
+ :root[data-theme="dark"] .sidebar {
+  background: linear-gradient(180deg, #081c35 0%, #071427 100%);
+  color: #9eb4d0;
+ }
+ :root[data-theme="dark"] .sidebar .nav-link:hover { background: rgba(255,255,255,.09); }
+ :root[data-theme="dark"] .sidebar .nav-link.active { color: #8be7d7; }
+ :root[data-theme="dark"] .topbar,
+ :root[data-theme="dark"] .card,
+ :root[data-theme="dark"] .modal,
+ :root[data-theme="dark"] .table-toolbar,
+ :root[data-theme="dark"] .datatable,
+ :root[data-theme="dark"] .mobile-record,
+ :root[data-theme="dark"] .profile-popover,
+ :root[data-theme="dark"] .notification-popover,
+ :root[data-theme="dark"] .searchable-menu {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+ }
+ :root[data-theme="dark"] .main-content,
+ :root[data-theme="dark"] .page-stack { color: var(--text); }
+ :root[data-theme="dark"] :is(.button-secondary, .button-ghost, .language-toggle, .searchable-trigger, .global-search-trigger, .profile-button) {
+  background: #1d3350;
+  color: var(--text);
+  border-color: var(--border);
+ }
+ :root[data-theme="dark"] :is(.button-secondary, .button-ghost, .language-toggle, .searchable-trigger, .global-search-trigger):hover {
+  background: #254362;
+  border-color: #51718f;
+  color: #fff;
+ }
+ :root[data-theme="dark"] .button-primary {
+  background: #3269de;
+  border-color: #3269de;
+  color: #fff;
+ }
+ :root[data-theme="dark"] .button-primary:hover { background: #4a7eea; }
+ :root[data-theme="dark"] :is(input, select, textarea) {
+  background-color: #101e33;
+  color: var(--text);
+  border-color: #39516b;
+ }
+ :root[data-theme="dark"] :is(input, textarea)::placeholder { color: #8da3bb; }
+ :root[data-theme="dark"] .data-table th,
+ :root[data-theme="dark"] .data-table thead,
+ :root[data-theme="dark"] .table-controls,
+ :root[data-theme="dark"] .column-controls {
+  background: #20344f;
+  color: #c0cfe3;
+  border-color: var(--border);
+ }
+ :root[data-theme="dark"] .data-table td,
+ :root[data-theme="dark"] .data-table th,
+ :root[data-theme="dark"] .section-title,
+ :root[data-theme="dark"] .worker-tabs,
+ :root[data-theme="dark"] .people-section-title {
+  border-color: var(--border);
+ }
+ :root[data-theme="dark"] .data-table tbody tr:hover,
+ :root[data-theme="dark"] .data-table tbody tr:focus-within {
+  background: #213a59;
+ }
+ :root[data-theme="dark"] .data-table td strong,
+ :root[data-theme="dark"] .data-table button,
+ :root[data-theme="dark"] .row-link {
+  color: var(--text);
+ }
+ :root[data-theme="dark"] :is(.badge-green, .badge-blue, .badge-amber, .badge-red) {
+  filter: saturate(.9) brightness(.95);
+ }
+ :root[data-theme="dark"] .dashboard-metric,
+ :root[data-theme="dark"] .dashboard-actions-card,
+ :root[data-theme="dark"] .report-card,
+ :root[data-theme="dark"] .people-profile-heading,
+ :root[data-theme="dark"] .people-note,
+ :root[data-theme="dark"] .people-details,
+ :root[data-theme="dark"] .worker-profile-heading {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
+ }
+ :root[data-theme="dark"] .dashboard-modern-heading h1,
+ :root[data-theme="dark"] .page-heading h1,
+ :root[data-theme="dark"] .section-title h2 { color: var(--text); }
+ :root[data-theme="dark"] .dashboard-period,
+ :root[data-theme="dark"] .searchable-trigger,
+ :root[data-theme="dark"] .stat-card-action {
+  background: #1b2d46;
+  color: var(--text);
+  border-color: var(--border);
+ }
+ :root[data-theme="dark"] .dashboard-period span { color: var(--text); }
+ :root[data-theme="dark"] :is(.dashboard-chart, .dashboard-chart-bars, .dashboard-panel-heading, .dashboard-section-header) {
+  border-color: var(--border);
+ }
+ :root[data-theme="dark"] .modal-overlay { background: rgba(3, 11, 23, .77); }
+ :root[data-theme="dark"] .notification-popover a:hover { background: #243c57; }
+ :root[data-theme="dark"] .main-footer { color: #8ea7c0; }
+ @media(max-width:700px) {
+  :root[data-theme="dark"] .mobile-nav { background: #132740; border-color: var(--border); }
+  :root[data-theme="dark"] .mobile-nav a, :root[data-theme="dark"] .mobile-nav button { color: #b6c9e1; }
+ }
+}
