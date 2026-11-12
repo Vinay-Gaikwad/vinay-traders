@@ -337,7 +337,7 @@ export function setAttendance(data: AppData, entry: Omit<Attendance, 'id'>): App
 export function saveDeposit(data: AppData, entry: Omit<Deposit, 'id'>): AppData {
   finite(entry.expected, 'Expected amount')
   finite(entry.paid, 'Paid amount')
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(entry.date) || Number.isNaN(Date.parse(entry.date + 'T00:00:00'))) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.date) || Number.isNaN(Date.parse(entry.date + 'T00:00:00'))) {
     throw new Error('Choose a valid deposit date.')
   }
   if ((entry.status === 'Skipped' || entry.status === 'Holiday') && entry.paid > 0) {
