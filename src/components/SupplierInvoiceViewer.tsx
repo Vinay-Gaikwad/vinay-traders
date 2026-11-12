@@ -10,7 +10,7 @@ import '../styles/supplier-invoice-viewer.css'
 export function SupplierInvoiceViewer({dataUrl,name}:{dataUrl:string;name:string}){
   const [open,setOpen]=useState(false)
   const supported=/^data:(application\/pdf|image\/(png|jpeg|webp));base64,[A-Za-z0-9+/]+={0,2}$/.test(dataUrl)
-  const safeName=(name||'supplier-invoice.pdf').replace(/[\\/\x00-\x1f]/g,'_').slice(0,150)
+  const safeName=Array.from((name||'supplier-invoice.pdf').replace(/[\\/]/g,'_')).filter(char=>char.charCodeAt(0)>=32).join('').slice(0,150)
   if(!supported)return <span role="alert" className="muted">Attachment is unavailable or has an unsupported format.</span>
   return <div className="supplier-invoice-viewer">
     <Button type="button" onClick={()=>setOpen(true)}><Eye size={15}/>View supplier invoice</Button>
