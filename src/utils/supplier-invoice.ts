@@ -43,7 +43,7 @@ export async function readSupplierInvoice(file: File): Promise<SupplierInvoiceAt
   const payload = result.substring(result.indexOf(',') + 1)
   if (!/^[A-Za-z0-9+/]+={0,2}$/.test(payload)) throw new Error('The supplier invoice could not be read safely.')
   return {
-    attachmentName: file.name.replace(/[\\/\x00-\x1f]/g, '_').slice(0, 150),
+    attachmentName: Array.from(file.name.replace(/[\\/]/g, '_')).filter(char=>char.charCodeAt(0)>=32).join('').slice(0, 150),
     attachmentData: `data:${mime};base64,${payload}`,
   }
 }
