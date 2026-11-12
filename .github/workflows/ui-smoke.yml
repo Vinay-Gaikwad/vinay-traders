@@ -42,3 +42,4 @@ jobs:
           retention-days: 14
 
 # This workflow uses local test data and never connects to production Supabase.
+# Re-run after fixing Supabase PromiseLike compile compatibility.
