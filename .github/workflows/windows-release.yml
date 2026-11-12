@@ -61,11 +61,16 @@ jobs:
           $files = Get-ChildItem -Path 're fin' -Filter '*.exe' -File
           if ($files.Count -lt 1) { throw 'Windows EXE output not found in re fin.' }
           $files | ForEach-Object { Write-Host "Built: $($_.Name)  ($($_.Length) bytes)" }
+          $sums = $files | ForEach-Object { "$((Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant())  $($_.Name)" }
+          $sums | Set-Content -Path 're fin/SHA256SUMS.txt' -Encoding utf8
+          Write-Host "Verified release source commit: $env:GITHUB_SHA"
       - name: Upload unsigned EXE files
         uses: actions/upload-artifact@v4
         with:
           name: vinay-traders-windows-exe
-          path: 're fin/*.exe'
+          path: |
+            re fin/*.exe
+            re fin/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
 # Build checkout refresh: 2026-11-13 membership TypeScript compatibility fix
