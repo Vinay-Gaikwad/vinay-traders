@@ -9,6 +9,16 @@ const STORAGE_KEY = 'vinay-traders-app-data-v1'
 // catalogue-only workspace instead of inheriting data from an older build.
 const CLIENT_STORAGE_KEY = 'vinay-traders-client-data-v2'
 const PENDING_SYNC_KEY = 'vinay-traders-pending-sync-v1'
+const REMOTE_REVISION_KEY = 'vinay-traders-remote-revision-v1'
+let remoteRevision: string | undefined
+let syncConflict = false
+const readRevision = () => {
+ try { return localStorage.getItem(REMOTE_REVISION_KEY) ?? undefined } catch { return undefined }
+}
+const rememberRevision = (value: unknown) => {
+ remoteRevision = typeof value === 'string' ? value : undefined
+ if (remoteRevision) { try { localStorage.setItem(REMOTE_REVISION_KEY, remoteRevision) } catch { /* no browser storage */ } }
+}
 const QUERY_KEY = ['vinay-traders-data'] as const
 let memoryData: AppData | undefined
 
@@ -107,17 +117,27 @@ async function loadRemoteData(): Promise<AppData> {
  try {
   const pending = readPendingSync()
   if (pending) {
-   await saveRemoteData(pending)
-   clearPendingSync()
-   return structuredClone(pending)
+   const stateRows = await selectRows('vt_app_state')
+   const liveRevision = typeof stateRows[0]?.updated_at === 'string' ? String(stateRows[0].updated_at) : undefined
+   const localRevision = readRevision()
+   if (liveRevision && localRevision && liveRevision === localRevision) {
+    rememberRevision(liveRevision)
+    await saveRemoteData(pending)
+    clearPendingSync()
+    return normalizeAppData(pending)
+   }
+   // Unknown/stale local data MUST NOT overwrite somebody else's cloud records.
+   syncConflict = true
+   notifyRemoteSyncWarning(new Error('Unsynced local changes were found, but the cloud version is different or unknown. Automatic upload has been paused to prevent data loss. Export a local backup before reconciling changes.'))
+   return normalizeAppData(pending)
   }
   const stateRows = await selectRows('vt_app_state')
   if (stateRows[0]?.data) {
-   const normalized = normalizeAppData(stateRows[0].data as Partial<AppData>)
-   if (normalized.products.length !== (stateRows[0].data as AppData).products?.length) await saveRemoteData(normalized)
-   return normalized
+   rememberRevision(stateRows[0].updated_at)
+   return normalizeAppData(stateRows[0].data as Partial<AppData>)
   }
-  if (!stateRows.length) { await saveRemoteData(initialData); return structuredClone(initialData) }
+  // Never initialize or replace a cloud workspace as a side effect of page load.
+  // Older deployments may still have records in the normalized tables.
   const [products, batches, suppliers, customers, plumbers, workers, attendance, invoices, invoiceItems, purchases, purchaseItems, payments, deposits, stocks, prices, settingsRows, permissions, notifications] = await Promise.all([
    selectRows('vt_products'), selectRows('vt_inventory_batches'), selectRows('vt_suppliers'), selectRows('vt_customers'), selectRows('vt_plumbers'), selectRows('vt_workers'), selectRows('vt_attendance'), selectRows('vt_invoices'), selectRows('vt_invoice_items'), selectRows('vt_purchases'), selectRows('vt_purchase_items'), selectRows('vt_payments'), selectRows('vt_deposits'), selectRows('vt_stock_transactions'), selectRows('vt_price_history'), selectRows('vt_settings'), selectRows('vt_role_permissions'), selectRows('vt_notifications'),
   ])
@@ -176,9 +196,37 @@ async function syncNormalizedData(data: AppData) {
 
 async function saveRemoteData(data: AppData) {
  if (!supabase) return
- const { error: stateError } = await supabase.from('vt_app_state').upsert({ id: 'default', data, updated_at: new Date().toISOString() })
- if (stateError) throw stateError
- void syncNormalizedData(data)
+ if (syncConflict) throw new Error('Cloud sync is paused: local changes need manual reconciliation to prevent overwriting another device.')
+ const version = remoteRevision ?? readRevision()
+ const updatedAt = new Date().toISOString()
+ if (version) {
+  // Optimistic locking: update only if the cloud row has not changed since the
+  // last successful read/save from this device.
+  const { data: rows, error } = await supabase.from('vt_app_state')
+   .update({ data, updated_at: updatedAt })
+   .eq('id', 'default').eq('updated_at', version).select('updated_at')
+  if (error) throw error
+  if (!rows || rows.length !== 1) {
+   syncConflict = true
+   throw new Error('The cloud workspace changed on another device. Your local changes have been retained, but automatic upload is paused to prevent overwriting them.')
+  }
+  rememberRevision(rows[0].updated_at)
+ } else {
+  const { data: existing, error: readError } = await supabase.from('vt_app_state')
+   .select('updated_at').eq('id', 'default').maybeSingle()
+  if (readError) throw readError
+  if (existing) {
+   syncConflict = true
+   throw new Error('A cloud workspace already exists. Reload and reconcile local changes before saving.')
+  }
+  const { data: inserted, error } = await supabase.from('vt_app_state')
+   .insert({ id: 'default', data, updated_at: updatedAt }).select('updated_at').single()
+  if (error) throw error
+  rememberRevision(inserted.updated_at)
+ }
+ // The historical normalized-table projection deletes and recreates entire
+ // tables in the background. Disable by default until transactional sync ships.
+ if (import.meta.env.VITE_ENABLE_NORMALIZED_PROJECTION === 'true') void syncNormalizedData(data)
 }
 
 function notifyRemoteSyncWarning(error: unknown) {
