@@ -30,8 +30,8 @@ jobs:
         run: npm ci
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
-      - name: Build static app for visual smoke test
-        run: npm run client:build
+      - name: Build web app with root-relative assets for deep-link testing
+        run: npm run build
       - name: Run responsive browser smoke tests
         run: npx playwright test
       - name: Upload smoke screenshots
