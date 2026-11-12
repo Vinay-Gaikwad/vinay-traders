@@ -31,6 +31,8 @@ jobs:
         run: npm ci
       - name: Compile web application
         run: npm run build
+      - name: Run accounting regression tests
+        run: npm run test
 
   lint:
     name: Source lint
