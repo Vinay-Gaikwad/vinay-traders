@@ -31,7 +31,12 @@ export function DashboardPage() {
   const completed = data.invoices.filter(invoice => invoice.status === 'Completed')
   const todaySales = completed.filter(invoice => invoice.date.slice(0, 10) === todayValue)
   const salesTotal = todaySales.reduce((sum, invoice) => sum + invoice.totals.grandTotal, 0)
-  const purchaseTotal = data.purchases.filter(purchase => purchase.date.slice(0, 10) === todayValue).reduce((sum, purchase) => sum + purchase.totals.grandTotal, 0)
+  const yesterdayDate = new Date()
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1)
+  const yesterdayValue = `${yesterdayDate.getFullYear()}-${String(yesterdayDate.getMonth()+1).padStart(2,'0')}-${String(yesterdayDate.getDate()).padStart(2,'0')}`
+  const yesterdayTotal = completed.filter(invoice => invoice.date.slice(0,10) === yesterdayValue).reduce((sum, invoice) => sum + invoice.totals.grandTotal, 0)
+  const salesTrend = yesterdayTotal > 0 ? `${salesTotal >= yesterdayTotal ? '↑' : '↓'} ${Math.abs((salesTotal-yesterdayTotal)/yesterdayTotal*100).toFixed(1)}% vs yesterday` : salesTotal > 0 ? 'Sales recorded today' : 'No sales yesterday'
+  const purchaseTotal = data.purchases.filter(purchase => purchase.status === 'Completed' && purchase.date.slice(0, 10) === todayValue).reduce((sum, purchase) => sum + purchase.totals.grandTotal, 0)
   const inventoryValue = data.products.reduce((sum, product) => sum + product.stock * product.purchaseRate, 0)
   const outstanding = data.customers.reduce((sum, customer) => sum + Math.max(0, customer.balance), 0)
   const lowStock = data.products.filter(product => product.stock <= product.reorderLevel)
@@ -64,7 +69,7 @@ export function DashboardPage() {
     const inRange = (value: string) => value.slice(0,10) >= from && value.slice(0,10) <= to
     const rows: PdfRow[] = []
     completed.filter(row=>inRange(row.date)).forEach(row=>rows.push({Section:'Bills',Reference:row.number,Date:formatDate(row.date),Details:row.customerName,Quantity:row.items.length,Amount:formatCurrency(row.totals.grandTotal),Status:row.paymentStatus}))
-    data.purchases.filter(row=>inRange(row.date)).forEach(row=>rows.push({Section:'Purchases',Reference:row.number,Date:formatDate(row.date),Details:data.suppliers.find(s=>s.id===row.supplierId)?.name??'Supplier',Quantity:row.items.length,Amount:formatCurrency(row.totals.grandTotal),Status:row.paymentStatus}))
+    data.purchases.filter(row=>row.status==='Completed'&&inRange(row.date)).forEach(row=>rows.push({Section:'Purchases',Reference:row.number,Date:formatDate(row.date),Details:data.suppliers.find(s=>s.id===row.supplierId)?.name??'Supplier',Quantity:row.items.length,Amount:formatCurrency(row.totals.grandTotal),Status:row.paymentStatus}))
     data.payments.filter(row=>inRange(row.date)).forEach(row=>rows.push({Section:'Payments',Reference:row.reference||'—',Date:formatDate(row.date),Details:`${row.entityType} · ${row.entityId}`,Quantity:'—',Amount:formatCurrency(row.amount),Status:row.method}))
     data.deposits.filter(row=>inRange(row.date)).forEach(row=>rows.push({Section:'Pat Sanstha',Reference:row.planName??'Shop Deposit',Date:formatDate(row.date),Details:row.notes||'—',Quantity:'—',Amount:formatCurrency(row.paid),Status:row.status}))
     ;(data.expenses??[]).filter(row=>inRange(row.date)).forEach(row=>rows.push({Section:`${row.kind} expense`,Reference:row.title,Date:formatDate(row.date),Details:row.notes||'—',Quantity:'—',Amount:formatCurrency(row.amount),Status:row.method}))
@@ -72,7 +77,7 @@ export function DashboardPage() {
     ;(data.invoiceReturns??[]).forEach(ret=>{ (ret.refunds??[]).filter(refund=>inRange(refund.date)).forEach(refund=>rows.push({Section:'Customer refund',Reference:ret.number,Date:formatDate(refund.date),Details:refund.reference||'Return refund',Quantity:'—',Amount:'− '+formatCurrency(refund.amount),Status:refund.method})) })
     data.products.forEach(product=>rows.push({Section:'Current stock',Reference:product.sku,Date:to,Details:`${product.name} · ${product.variant}`,Quantity:`${product.stock} ${product.salesUnit}`,Amount:formatCurrency(product.stock*product.purchaseRate),Status:product.stock<=product.reorderLevel?'Low stock':'In stock'}))
     const rangeSales=completed.filter(row=>inRange(row.date)).reduce((sum,row)=>sum+row.totals.grandTotal,0)
-    const rangePurchase=data.purchases.filter(row=>inRange(row.date)).reduce((sum,row)=>sum+row.totals.grandTotal,0)
+    const rangePurchase=data.purchases.filter(row=>row.status==='Completed'&&inRange(row.date)).reduce((sum,row)=>sum+row.totals.grandTotal,0)
     const refundsPaid=(data.invoiceReturns??[]).flatMap(ret=>ret.refunds??[]).filter(refund=>inRange(refund.date)).reduce((sum,refund)=>sum+refund.amount,0)
     const refundsPending=(data.invoiceReturns??[]).reduce((sum,ret)=>sum+Math.max(0,(ret.refundDue??0)-(ret.refundPaid??0)),0)
     void printPdfReport(`${exportPeriod} Shop Overview`,rows,data.settings,{orientation:'landscape',summary:{Period:`${from} to ${to}`,Bills:formatCurrency(rangeSales),Purchases:formatCurrency(rangePurchase),'Refunds paid':formatCurrency(refundsPaid),'Refunds pending':formatCurrency(refundsPending),'Customer balance':formatCurrency(outstanding),'Supplier balance':formatCurrency(data.suppliers.reduce((sum,row)=>sum+row.balance,0)),'Current stock value':formatCurrency(inventoryValue),'Total products':data.products.length,'Low stock items':lowStock.length}})
@@ -85,8 +90,8 @@ export function DashboardPage() {
     </div>
 
     <div className="dashboard-metrics">
-      <Metric label="Today's sales" value={formatCurrency(salesTotal)} detail="↗ 12.5% vs yesterday" tone="green" icon={<CircleDollarSign size={19}/>} />
-      <Metric label="Today's purchases" value={formatCurrency(purchaseTotal)} detail={`${data.purchases.filter(purchase => purchase.date.slice(0, 10) === todayValue).length} supplier invoices`} tone="blue" icon={<ShoppingCart size={19}/>} />
+      <Metric label="Today's sales" value={formatCurrency(salesTotal)} detail={salesTrend} tone="green" icon={<CircleDollarSign size={19}/>} />
+      <Metric label="Today's purchases" value={formatCurrency(purchaseTotal)} detail={`${data.purchases.filter(purchase => purchase.status === 'Completed' && purchase.date.slice(0, 10) === todayValue).length} supplier invoices`} tone="blue" icon={<ShoppingCart size={19}/>} />
       <Metric label="Inventory value" value={formatCurrency(inventoryValue)} detail={`${data.products.length} active variants`} tone="yellow" icon={<Boxes size={19}/>} onClick={() => navigate('/inventory')} />
       <Metric label="Outstanding" value={formatCurrency(outstanding)} detail={`${data.customers.filter(customer => customer.balance > 0).length} customers with balance`} tone="red" icon={<Wallet size={19}/>} onClick={() => navigate('/customers')} />
       <Metric label="Alerts" value={unread.length + lowStock.length} detail={`${lowStock.length} low-stock items`} tone="purple" icon={<AlertTriangle size={19}/>} onClick={() => navigate('/notifications')} />
