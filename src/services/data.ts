@@ -252,7 +252,7 @@ export async function saveData(data: AppData) {
 
 export function useData() {
  const client = useQueryClient()
- const query = useQuery({ queryKey: QUERY_KEY, queryFn: supabaseConfigured ? loadRemoteData : async () => getData(), staleTime: 30_000, initialData: supabaseConfigured ? undefined : getData, placeholderData: supabaseConfigured ? getData() : undefined, retry: 1 })
+ const query = useQuery({ queryKey: QUERY_KEY, queryFn: supabaseConfigured ? loadRemoteData : async () => getData(), staleTime: 30_000, initialData: supabaseConfigured ? undefined : getData, placeholderData: undefined, retry: 1 })
  const mutate = async (updater: (data: AppData) => AppData) => { const current = structuredClone(query.data ?? getData()); const next = updater(current); await saveData(next); client.setQueryData(QUERY_KEY, next) }
  return { data: query.data ?? (clientRelease ? clientInitialData : initialData), isLoading: query.isLoading, error: query.error, refresh: () => client.invalidateQueries({ queryKey: QUERY_KEY }), mutate }
 }
