@@ -1,0 +1,7 @@
+.supplier-invoice-viewer{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.supplier-invoice-preview{width:100%;min-width:0;height:min(68dvh,760px);background:#f1f5fa;border:1px solid var(--border);border-radius:12px}
+.supplier-invoice-fallback{margin:8px 0;color:var(--muted);font-size:13px}
+.supplier-invoice-download{display:inline-flex;align-items:center;gap:7px;padding:10px 15px;border-radius:10px;border:1px solid var(--border);font-weight:650;color:var(--primary);background:#f5f9ff}
+.supplier-invoice-download:hover{background:#eaf2ff}
+.purchase-attachment-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+@media(max-width:700px){.supplier-invoice-preview{height:60dvh}}
