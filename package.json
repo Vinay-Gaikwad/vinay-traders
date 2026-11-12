@@ -21,7 +21,8 @@
     "android:release": "npm run client:build && cap sync android && cd android && gradlew.bat assembleRelease",
     "release:desktop": "npm run desktop:build",
     "release:android": "npm run android:build",
-    "client:android:build": "npm run client:build && cap sync android && cd android && gradlew.bat assembleDebug"
+    "client:android:build": "npm run client:build && cap sync android && cd android && gradlew.bat assembleDebug",
+    "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
