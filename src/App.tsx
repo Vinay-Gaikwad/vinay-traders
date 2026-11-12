@@ -22,6 +22,7 @@ import { DashboardPage } from './features/dashboard'
 import { ReportsPage } from './features/reports'
 import { ExpensesPage, ReturnsPage } from './features/finance'
 import './App.css'
+import './styles/phase1-foundation.css'
 
 // Keep the previous dashboard available for compatibility with older deep links.
 export function LegacyDashboard(){return <Dashboard/>}
