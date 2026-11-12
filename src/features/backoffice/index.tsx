@@ -220,7 +220,93 @@ export function AttendancePage(){
 export function PatsansthaPage(){const {data,mutate}=useData();const [open,setOpen]=useState(false),[plansOpen,setPlansOpen]=useState(false);const [reportPeriod,setReportPeriod]=useState<'Daily'|'Weekly'|'Monthly'>('Daily');const monthEntries=data.deposits.filter(row=>row.date.startsWith(today().slice(0,7)));const paid=monthEntries.reduce((sum,d)=>sum+d.paid,0),expected=monthEntries.reduce((sum,d)=>sum+d.expected,0),pending=Math.max(0,expected-paid);const reportRows=data.deposits.filter(entry=>{const end=new Date();end.setHours(23,59,59,999);const start=new Date(end);if(reportPeriod==='Daily')start.setHours(0,0,0,0);if(reportPeriod==='Weekly'){start.setDate(end.getDate()-6);start.setHours(0,0,0,0)}if(reportPeriod==='Monthly'){start.setDate(1);start.setHours(0,0,0,0)}const date=new Date(entry.date+'T12:00:00');return date>=start&&date<=end}).map(entry=>({Plan:entry.planName??'Shop Deposit',Date:formatDate(entry.date),Expected:formatCurrency(entry.expected),Paid:formatCurrency(entry.paid),Balance:formatCurrency(Math.max(0,entry.expected-entry.paid)),Status:entry.status,Method:entry.method,Notes:entry.notes||'—'}));const downloadReport=()=>printPdfReport('Pat Sanstha '+reportPeriod+' deposit report',reportRows,data.settings,{orientation:'landscape',summary:{'Total entries':reportRows.length,'Expected':formatCurrency(reportRows.reduce((sum,row)=>sum+Number(row.Expected.replace(/[^0-9.-]/g,'')),0)),'Paid':formatCurrency(reportRows.reduce((sum,row)=>sum+Number(row.Paid.replace(/[^0-9.-]/g,'')),0))}});return <div className="page-stack"><PageHeader title="पतसंस्था जमा नोंद" description="Track the shop's daily deposit commitment." actions={<><div className="segmented"><button className={reportPeriod==='Daily'?'active':''} onClick={()=>setReportPeriod('Daily')}>Daily</button><button className={reportPeriod==='Weekly'?'active':''} onClick={()=>setReportPeriod('Weekly')}>Weekly</button><button className={reportPeriod==='Monthly'?'active':''} onClick={()=>setReportPeriod('Monthly')}>Monthly</button></div><Button onClick={()=>setPlansOpen(true)}>Manage plans</Button><Button onClick={downloadReport}><Save size={15}/>Export report</Button><Button variant="primary" onClick={()=>setOpen(true)}><Plus size={16}/>Add deposit</Button></>}/><div className="grid-4"><StatCard label="Daily amount" value={formatCurrency((data.settings.depositPlans??[]).filter(plan=>plan.active).reduce((sum,plan)=>sum+plan.dailyAmount,0)||data.settings.dailyDeposit)} detail="Expected on active days" icon={<CalendarDays size={17}/>}/><StatCard label="Paid this month" value={formatCurrency(paid)} detail={`${monthEntries.filter(d=>d.status==='Paid').length} paid entries this month`} icon={<CheckCircle2 size={17}/>}/><StatCard label="Pending" value={formatCurrency(pending)} detail="Needs follow-up" icon={<AlertTriangle size={17}/>}/><StatCard label="Missed days" value={monthEntries.filter(d=>d.status==='Skipped').length} detail="This period" icon={<Wallet size={17}/>}/></div><Card><SectionTitle>Deposit ledger</SectionTitle><DataTable rows={data.deposits} searchKeys={['date','status','planName']} exportTitle="पतसंस्था deposit report" exportDateKey="date" exportDetails={data.settings} columns={[{key:'planName',label:'Deposit plan',render:row=>row.planName??'Shop Deposit'},{key:'date',label:'Date',render:row=>formatDate(row.date)},{key:'expected',label:'Expected',render:row=>formatCurrency(row.expected)},{key:'paid',label:'Paid',render:row=>formatCurrency(row.paid)},{key:'difference',label:'Difference',render:row=>formatCurrency(row.expected-row.paid)},{key:'status',label:'Status',render:row=><Badge tone={statusTone(row.status)}>{row.status}</Badge>},{key:'method',label:'Method'}]}/></Card><Modal open={open} onClose={()=>setOpen(false)} title="Add deposit"><DepositEditor plans={data.settings.depositPlans??[]} onClose={()=>setOpen(false)} mutate={mutate}/></Modal><DepositPlanManager open={plansOpen} onClose={()=>setPlansOpen(false)} mutate={mutate}/></div>}
 function DepositEditor({plans,onClose,mutate}:{plans:import('../../types').DepositPlan[];onClose:()=>void;mutate:(updater:(data:import('../../types').AppData)=>import('../../types').AppData)=>Promise<void>}){const activePlans=plans.filter(plan=>plan.active);const [planId,setPlanId]=useState(activePlans[0]?.id??''),[date,setDate]=useState(today()),[paid,setPaid]=useState(''),[method,setMethod]=useState<'Cash'|'UPI'|'Bank'>('UPI'),[notes,setNotes]=useState('');const plan=activePlans.find(item=>item.id===planId);const expected=plan?.dailyAmount??0;return <form onSubmit={async e=>{e.preventDefault();if(!plan){toast.error('Create an active deposit plan first.');return}try{await mutate(data=>saveDeposit(data,{date,planId:plan.id,planName:plan.name,expected,paid:Number(paid),status:Number(paid)>=expected?'Paid':Number(paid)>0?'Partial':'Skipped',method,receipt:'',notes}));toast.success('Deposit saved');onClose()}catch(error){toast.error(error instanceof Error?error.message:'Unable to save deposit')}}}><Field label="Deposit plan"><select value={planId} onChange={e=>setPlanId(e.target.value)}>{activePlans.map(item=><option key={item.id} value={item.id}>{item.name} · {formatCurrency(item.dailyAmount)} daily</option>)}</select></Field><Field label="Date"><DateInput value={date} onChange={setDate} ariaLabel="Deposit date"/></Field><Field label="Expected amount"><input value={formatCurrency(expected)} readOnly/></Field><Field label="Amount paid"><input type="number" min="0" step=".01" value={paid} onChange={e=>setPaid(e.target.value)}/></Field><Field label="Method"><select value={method} onChange={e=>setMethod(e.target.value as typeof method)}><option>Cash</option><option>UPI</option><option>Bank</option></select></Field><Field label="Notes"><textarea value={notes} onChange={e=>setNotes(e.target.value)}/></Field><div className="form-actions"><Button type="button" onClick={onClose}>Cancel</Button><Button variant="primary" type="submit" disabled={!activePlans.length}>Save deposit</Button></div></form>}
 
-function DepositPlanManager({open,onClose,mutate}:{open:boolean;onClose:()=>void;mutate:(updater:(data:import('../../types').AppData)=>import('../../types').AppData)=>Promise<void>}){const {data}=useData();const plans=data.settings.depositPlans??[];const [name,setName]=useState(''),[amount,setAmount]=useState('');const save=async()=>{if(!name.trim()||Number(amount)<=0){toast.error('Enter a plan name and a positive daily amount.');return}const plan={id:uid('deposit-plan'),name:name.trim(),dailyAmount:Number(amount),active:true};await mutate(current=>({...current,settings:{...current.settings,depositPlans:[...(current.settings.depositPlans??[]),plan]}}));setName('');setAmount('');toast.success('Deposit plan added')};return <Modal open={open} onClose={onClose} title="Manage deposit plans"><div className="form-grid"><Field label="Plan name"><input value={name} onChange={event=>setName(event.target.value)} placeholder="e.g. Daily savings"/></Field><Field label="Expected per day"><input type="number" min=".01" step=".01" value={amount} onChange={event=>setAmount(event.target.value)}/></Field></div><div className="form-actions"><Button variant="primary" onClick={()=>void save()}><Plus size={15}/>Add plan</Button></div><SectionTitle>Deposit plans</SectionTitle>{plans.length?<div className="stack-list">{plans.map(plan=><div className="notification-row" key={plan.id}><div className="notice-text"><strong>{plan.name}</strong><small>{formatCurrency(plan.dailyAmount)} per day</small></div><label><input type="checkbox" checked={plan.active} onChange={event=>void mutate(current=>({...current,settings:{...current.settings,depositPlans:(current.settings.depositPlans??[]).map(item=>item.id===plan.id?{...item,active:event.target.checked}:item)}}))}/> Active</label></div>)}</div>:<EmptyState title="No deposit plans" description="Add a plan to record separate deposits on the same day."/>}</Modal>}
+function DepositPlanManager({
+ open,onClose,mutate,
+}: {
+ open:boolean
+ onClose:()=>void
+ mutate:(updater:(data:import('../../types').AppData)=>import('../../types').AppData)=>Promise<void>
+}){
+ const {data}=useData()
+ const plans=data.settings.depositPlans??[]
+ const [name,setName]=useState('')
+ const [amount,setAmount]=useState('')
+ const [draftAmounts,setDraftAmounts]=useState<Record<string,string>>({})
+ const save=async()=>{
+  const dailyAmount=Number(amount)
+  if(!name.trim()||!Number.isFinite(dailyAmount)||dailyAmount<=0){
+   toast.error('Enter a plan name and a positive daily amount.');return
+  }
+  if(plans.some(plan=>plan.name.toLowerCase()===name.trim().toLowerCase())){
+   toast.error('A Pat Sanstha with this name already exists.');return
+  }
+  try{
+   const plan={id:uid('deposit-plan'),name:name.trim(),dailyAmount,active:true}
+   await mutate(current=>({
+    ...current,settings:{
+     ...current.settings,depositPlans:[...(current.settings.depositPlans??[]),plan]
+    }
+   }))
+   setName('');setAmount('')
+   toast.success('Pat Sanstha deposit plan added')
+  }catch(error){toast.error(error instanceof Error?error.message:'Unable to create deposit plan')}
+ }
+ const changeAmount=async(planId:string)=>{
+  const currentPlan=plans.find(item=>item.id===planId)
+  if(!currentPlan)return
+  const value=Number(draftAmounts[planId]??currentPlan.dailyAmount)
+  if(!Number.isFinite(value)||value<=0){toast.error('Daily deposit amount must be positive.');return}
+  if(value===currentPlan.dailyAmount)return
+  try{
+   await mutate(current=>({
+    ...current,
+    settings:{
+     ...current.settings,
+     depositPlans:(current.settings.depositPlans??[]).map(item=>item.id===planId?{
+      ...item,dailyAmount:value
+     }:item),
+    }
+   }))
+   setDraftAmounts(previous=>{const updated={...previous};delete updated[planId];return updated})
+   toast.success('New daily deposit amount saved. Older deposit history is unchanged.')
+  }catch(error){toast.error(error instanceof Error?error.message:'Unable to update plan amount')}
+ }
+ return <Modal open={open} onClose={onClose} title="Manage Pat Sanstha plans">
+  <div className="form-grid">
+   <Field label="Pat Sanstha name"><input value={name} onChange={event=>setName(event.target.value)} placeholder="e.g. Shirala daily savings"/></Field>
+   <Field label="Expected amount per day"><input type="number" min=".01" step=".01" value={amount} onChange={event=>setAmount(event.target.value)}/></Field>
+  </div>
+  <div className="form-actions"><Button variant="primary" onClick={()=>void save()}><Plus size={15}/>Add Pat Sanstha</Button></div>
+  <SectionTitle>Configured deposit plans</SectionTitle>
+  {plans.length?<div className="stack-list">
+   {plans.map(plan=><div className="deposit-plan-row" key={plan.id}>
+    <div className="notice-text"><strong>{plan.name}</strong><small>Current daily amount: {formatCurrency(plan.dailyAmount)}</small></div>
+    <label className="deposit-plan-rate-field">New daily amount
+     <input aria-label={`Daily amount for ${plan.name}`} type="number" min=".01" step=".01"
+      value={draftAmounts[plan.id]??String(plan.dailyAmount)}
+      onChange={event=>setDraftAmounts(previous=>({...previous,[plan.id]:event.target.value}))}
+     />
+    </label>
+    <Button type="button" onClick={()=>void changeAmount(plan.id)}
+     disabled={!Number.isFinite(Number(draftAmounts[plan.id]??plan.dailyAmount))||
+      Number(draftAmounts[plan.id]??plan.dailyAmount)<=0||
+      Number(draftAmounts[plan.id]??plan.dailyAmount)===plan.dailyAmount}>Save amount</Button>
+    <label className="deposit-plan-active"><input type="checkbox" checked={plan.active}
+      onChange={event=>void mutate(current=>({
+       ...current,
+       settings:{
+        ...current.settings,
+        depositPlans:(current.settings.depositPlans??[]).map(item=>item.id===plan.id?{
+         ...item,active:event.target.checked
+        }:item)
+       }
+      }))}/>
+      Active
+    </label>
+   </div>)}
+  </div>:<EmptyState title="No deposit plans" description="Add a Pat Sanstha to record separate daily deposits."/>}
+ </Modal>
+}
 
 export function SettingsPage(){const {data,mutate}=useData();const location=useLocation();const navigate=useNavigate();const [saved,setSaved]=useState(false);const section=({business:'Business profile',inventory:'Inventory',commission:'Commission',deposits:'Deposits',workers:'Workers',roles:'Roles'} as Record<string,string>)[location.pathname.split('/')[2]??'business']??'Business profile';const [commission,setCommission]=useState(String(data.settings.defaultCommission)),[deposit,setDeposit]=useState(String(data.settings.dailyDeposit));const save=async()=>{await mutate(current=>({...current,settings:{...current.settings,defaultCommission:Number(commission),dailyDeposit:Number(deposit),gstEnabled:false}}));setSaved(true);setTimeout(()=>setSaved(false),1800);toast.success('Settings saved')};return <div className="page-stack"><PageHeader title="Settings" description="Configure inventory, business and workforce preferences." actions={saved?<Badge tone="green"><Check size={13}/>Saved</Badge>:<Button variant="primary" onClick={save}><Save size={15}/>Save changes</Button>}/><div className="settings-layout"><Card className="settings-nav">{['Business profile','Inventory','Commission','Deposits','Workers','Roles'].map(item=><button className={section===item?'active':''} onClick={()=>navigate(`/settings/${({'Business profile':'business','Inventory':'inventory','Commission':'commission','Deposits':'deposits','Workers':'workers','Roles':'roles'} as Record<string,string>)[item]}`)} key={item}>{item}</button>)}</Card><Card className="settings-content"><h2>{section}</h2><p>These preferences apply to new transactions on this device.</p>{section==='Business profile'&&<div className="form-grid"><Field label="Business name"><input value={data.settings.businessName} readOnly/></Field><Field label="Owner"><input value={data.settings.ownerName} readOnly/></Field><Field label="Address"><textarea value={data.settings.address} readOnly/></Field><Field label="Mobile"><input value={data.settings.mobile} readOnly/></Field></div>}{section==='Commission'&&<div className="form-grid"><Field label="Default plumber commission %"><input type="number" value={commission} onChange={e=>setCommission(e.target.value)}/></Field><Field label="Calculation basis"><select value="before-gst" disabled><option value="before-gst">Before total</option></select></Field></div>}{section==='Deposits'&&<div className="form-grid"><Field label="Daily deposit amount"><input type="number" value={deposit} onChange={e=>setDeposit(e.target.value)}/></Field><Field label="Reminder"><div className="settings-toggle"><span>Remind when an entry is missed</span><input type="checkbox" checked={data.settings.depositReminder} readOnly/></div></Field></div>}{section==='Inventory'&&<div className="info-banner"><Package size={15}/>Negative inventory is disabled. Use Stock ledger to record corrections and lot conversions.</div>}{section==='Workers'&&<div className="info-banner"><Users size={15}/>Worker profiles, attendance and payroll are available from the People section.</div>}{section==='Roles'&&<div className="permission-grid">{['Admin','Billing staff','Purchase staff','Inventory staff','Accountant'].map(role=><div key={role}><strong>{role}</strong><span>View · Create · Edit</span></div>)}</div>}</Card></div></div>}
 export function NotificationsPage(){const {data,mutate}=useData();const unread=data.notifications.filter(item=>!item.read);return <div className="page-stack"><PageHeader title="Notifications" description="Actionable reminders for the shop." actions={unread.length>0&&<Button onClick={()=>mutate(current=>({...current,notifications:current.notifications.map(item=>({...item,read:true}))}))}>Mark all read</Button>}/><Card><div className="notification-list">{data.notifications.map(notification=><div className={`notification-row ${notification.read?'read':''}`} key={notification.id}><div className={`notice-icon ${notification.severity}`}><AlertTriangle size={17}/></div><div className="notice-text"><h3>{notification.title}</h3><p>{notification.description}</p><small>{formatDate(notification.date)} · {notification.type}</small></div>{!notification.read&&<Button variant="ghost" onClick={()=>mutate(current=>({...current,notifications:current.notifications.map(item=>item.id===notification.id?{...item,read:true}:item)}))}>Mark read</Button>}</div>)}</div></Card></div>}
