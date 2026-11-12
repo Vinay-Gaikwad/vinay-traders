@@ -188,6 +188,33 @@ export function createInvoiceReturn(data: AppData, invoiceId: string, returnedIt
  return next
 }
 
+
+/** Record a customer refund against an approved sale return without changing
+ * the original bill, return, or customer's purchase history. */
+export function recordReturnRefund(
+ data: AppData,
+ returnId: string,
+ payment: { amount: number; method: 'Cash' | 'UPI' | 'Bank' | 'Card'; reference: string; date?: string }
+): AppData {
+ finite(payment.amount, 'Refund amount', .01)
+ const record = (data.invoiceReturns ?? []).find(row => row.id === returnId)
+ if (!record) throw new Error('Return record was not found.')
+ const due = roundMoney(Math.max(0, (record.refundDue ?? 0) - (record.refundPaid ?? 0)))
+ if (due <= 0) throw new Error('This return has no outstanding customer refund.')
+ if (roundMoney(payment.amount) > due) throw new Error('Refund exceeds the outstanding amount.')
+ if (!['Cash', 'UPI', 'Bank', 'Card'].includes(payment.method)) throw new Error('Select a supported refund method.')
+ const refund = { id: uid('refund'), date: payment.date ?? today(), amount: roundMoney(payment.amount), method: payment.method, reference: payment.reference.trim() }
+ const next = structuredClone(data)
+ next.invoiceReturns = (next.invoiceReturns ?? []).map(row =>
+  row.id === record.id ? {
+   ...row,
+   refundPaid: roundMoney((row.refundPaid ?? 0) + refund.amount),
+   refunds: [...(row.refunds ?? []), refund]
+  } : row
+ )
+ return next
+}
+
 export function createExpense(data: AppData, input: Omit<Expense, 'id'>): AppData {
  finite(input.amount, 'Expense amount', .01)
  if (!input.title.trim()) throw new Error('Enter an expense description.')
