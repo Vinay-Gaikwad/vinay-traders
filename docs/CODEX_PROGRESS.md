@@ -70,6 +70,32 @@ Pat Sanstha now has desktop/mobile end-to-end verification for creating two sepa
 
 `tests/e2e/pat-sanstha.spec.ts` and its six generated report/preview fixtures were committed as `07c7bae` and pushed to `origin/main`. Full production data, migration, printer, and release gates remain unverified.
 
+## Current implementation checkpoint (`69492f2` barcode labels)
+
+Barcode labels now have a complete builder, saved reprint settings, unique product/unit Code 128 values, SVG download and a dedicated A4 print surface. The 18-label fixture prints as two portrait A4 pages (16 + 2), with no blank pages. The builder and both PDF pages were visually reviewed.
+
+- `npm run lint`: pass, zero warnings; `npm test`: 9 passed; client release TypeScript/Vite build: pass with the existing large-bundle advisory.
+- Targeted bill/barcode browser tests: 4 passed across desktop/mobile Chromium.
+- Source commit `69492f2` is pushed to `origin/main`. Detailed evidence and device limitations: `docs/codex-qa/PHASE_05.md`.
+- Physical barcode printer/scanner and Electron acceptance remain unverified; Phase 05 is IN PROGRESS.
+
+## Current implementation checkpoint (`31f9e60` billing safety and A4 bills)
+
+Resuming a saved draft now preserves the saved record, ID and number until checkout completes. Loading a draft or quotation replaces cart metadata, and route loading no longer refills the cart after a successful save. Draft completion validates the full existing customer credit balance. Completed bills cannot become drafts, and returned/revised historical records cannot be edited through the ordinary billing path. Existing dates and preparers are preserved; quotation source links survive drafts and follow return revisions.
+
+The partial-payment fixture verifies subtotal ₹184.00, discount ₹18.40, round off ₹0.40, grand total ₹166.00, initial payment ₹20.00 and due ₹146.00. Later settlement records one ₹146.00 receipt, restores the customer's previous balance and leaves the stock decrement at two units. The bill now uses a named A4 print page with 12 mm margins, proportioned columns, 9 pt table/variant text, visible due date and round off, repeated table headers and page numbers. Blank trailing pages caused by a conflicting quotation page rule were removed.
+
+| Check | Result | Evidence / limit |
+| --- | --- | --- |
+| `npm run lint` | Pass, zero warnings | Final source/test changes |
+| `npm test` | Pass, 17 tests | Eight new accounting cases cover draft credit, transition guards, history, quote links and identity; no production data |
+| Client release TypeScript/Vite build | Pass | Existing >500 KB bundle advisory remains |
+| Full Playwright suite | Pass, 40 tests | Desktop/mobile Chromium, before final print typography/blank-page corrections |
+| Final focused Playwright suite | Pass, 14 tests | Billing draft/payment, A4 bills/barcodes, quotations and returns after final print corrections |
+| A4 PDF evidence | Pass for isolated fixtures | One-page partial bill; seven-page, 60-row long-description bill. A4 dimensions, repeated table headers, all 60 rows, final totals and no empty pages checked; PNG previews visually reviewed. |
+
+Source/test details and remaining acceptance are in `docs/codex-qa/PHASE_06.md`. Reviewed PDFs are `output/pdf/verification-2026-11-13/billing-partial-a4.pdf` and `customer-bill-60-rows-a4.pdf`; PDF/UI previews are in `output/pdf/previews/verification-2026-11-13-updated/`. Phases remain IN PROGRESS: Electron/printer verification, broader payment/edit cases and remaining release gates have not passed.
+
 ## Phase status
 
 | Phase | Status | Commit | Current checkpoint |
@@ -79,24 +105,24 @@ Pat Sanstha now has desktop/mobile end-to-end verification for creating two sepa
 | 02 Purchase and A4 documents | IN PROGRESS | `a4a5987` | Desktop/mobile save/reload/view attachment, unmatched supplier rejection, duplicate invoice validation, supplier-name search and three A4 PDF exports pass. A4 invoice and register PDFs visually checked at 1/20/100 rows; totals remain with the last register rows and long text wraps. Attachment cloud-storage strategy/size, Marathi fidelity, physical printer, and comparison against owner-approved saved purchase records remain. |
 | 03 Inventory and catalog | IN PROGRESS | `a4a5987` | Desktop/mobile add and edit verify category, supplier/mobile, discount-aware margin and supplier filter. A4 1,552-product report has visible calculated amount and final totals. Historical source page-by-page reconciliation, product import review and further stock-ledger/variant cases remain. |
 | 04 Quotations | IN PROGRESS | `45c7b43` | Desktop/mobile create, edit, date/customer search, A4 PDF, and conversion to a tax-free bill pass. Long-table pagination and more status/edit cases remain. |
-| 05 Barcode labels | IN PROGRESS | `e6837e7` | Code 128 generation, SVG download and print surface exist. Device and sheet-print verification remain. |
-| 06 Billing / POS | IN PROGRESS | `e6837e7` | Tax-free bill creation and A4 print surface exist. Complete financial workflow and PDF review remain. |
-| 07 Bills and history | IN PROGRESS | `45c7b43` | Partial return creates a revised bill and refund/payment history; broader bill edit/view/filter cases and payment reconciliation remain. |
+| 05 Barcode labels | IN PROGRESS | `69492f2` | Desktop/mobile save, unique unit code, SVG, scanner-style search and two-page A4 sheet pass; physical printer/scanner and Electron remain unverified. |
+| 06 Billing / POS | IN PROGRESS | `31f9e60` | Draft identity/resume, credit bounds, guarded historical/status edits, discounted partial checkout/settlement and one-/seven-page A4 bills pass in isolated tests. Mixed/cash-change flows, completed-bill edits after later receipts, all viewports and Electron/printer acceptance remain. |
+| 07 Bills and history | IN PROGRESS | `31f9e60` | Returned history is read-only; draft/returned records cannot be marked paid. Partial bill settlement retains initial payment and one later receipt without another stock deduction. Broader filters and payment/edit reconciliation remain. |
 | 08 Customers | IN PROGRESS | `e6837e7` | Directory, profiles, ledger, payments and plumber references exist. Search, account math and document acceptance remain. |
 | 09 Suppliers | IN PROGRESS | `e6837e7` | Separate name/mobile search, account and purchase history exist. Form validation, payment and PDF acceptance remain. |
 | 10 Plumbers | IN PROGRESS | `e6837e7` | Referral, commission, reward and payment history exist. Return reversal/carry-forward acceptance remains. |
 | 11 Workers / payroll | IN PROGRESS | `a4a5987` | Desktop/mobile tests verify settlement zeroes remaining base pay and preserves payment history, and bonus amount/date bounds persist. Broader pay-cycle, partial payment and payslip cases remain. |
 | 12 Attendance | IN PROGRESS | `a4a5987` | Desktop/mobile monthly bulk test preserves recorded statuses and skips future dates. Daily/month grid editing, leave, payroll links and A4 reports remain. |
 | 13 Pat Sanstha | IN PROGRESS | `07c7bae` | Desktop/mobile test verifies two plan-specific amounts on one date, past expected values remain unchanged after a plan rate change, and daily/weekly/monthly A4 report totals. Duplicate edit semantics and extended period boundaries remain. |
-| 14 Returns | IN PROGRESS | `45c7b43` | Desktop/mobile partial return verifies stock reversal, customer and plumber commission adjustment, refund payment, and a branded A4 before/after PDF. Full return, repeat-return caps, restock-off, and broader settlement cases remain. |
+| 14 Returns | IN PROGRESS | `31f9e60` | Existing partial-return coverage still passes; returned historical bills are protected from ordinary edit, and quotation links follow current revisions. Full return, repeat-return caps, restock-off, and broader settlement cases remain. |
 | 15 Expenses | IN PROGRESS | `e6837e7` | Personal/shop classification and three export actions exist. CRUD, date filters and totals remain to verify. |
 | 16 Dashboard / shared operations | IN PROGRESS | `e6837e7` | Dashboard, settings, notifications and report exports exist. All period boundaries, navigation and device views remain to verify. |
 | 17 Windows and web release | IN PROGRESS | `e6837e7` | Build/release workflows exist. Installer, actual device verification and authorized deployment are outstanding. |
 
 ## Current implementation activity
 
-- Continue from the earliest incomplete phase, fixing evidenced defects and adding regression coverage.
-- Next targeted work: verify same-day deposits across multiple Pat Sanstha plans and their period reports, then continue through the remaining incomplete modules and release gates.
+- Continue from the current billing acceptance checkpoint, preserving the tested purchase, inventory, payroll, quotation, return, Pat Sanstha and barcode work.
+- Next targeted work: verify completed-bill edits after later receipts and mixed/cash-change payments; normalize the extra separator in newly generated bill numbers when the configured prefix already ends in a hyphen, preserving saved bill numbers. Then continue remaining module acceptance and release gates.
 - Maintain the production boundary: no database mutation, RLS cutover, production web deploy, or overwrite of local business data.
 
 ## Remaining release gates
