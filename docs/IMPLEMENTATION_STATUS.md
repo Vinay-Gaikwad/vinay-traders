@@ -1,10 +1,10 @@
 # Vinay Traders — Implementation & Release Status
 
-Checked against the local \`main\` checkout at \`e6837e7\` on **13 November 2026**. This is a status report, not a production sign-off. Source presence and passing unit tests do not replace testing each workflow in Windows, web and Supabase. See \`docs/CODEX_PROGRESS.md\` and \`docs/CODEX_IMPLEMENTATION_MATRIX.md\` for the current audited baseline and phase gates.
+Audited from baseline commit `e6837e7` on **13 November 2026**; latest focused changes are in commit `a4a5987` on `main`. This is a status report, not a production sign-off. Source presence and passing unit tests do not replace testing each workflow in Windows, web and Supabase. See `docs/CODEX_PROGRESS.md` and `docs/CODEX_IMPLEMENTATION_MATRIX.md` for the current audited baseline and phase gates.
 
 ## Latest local verification checkpoint
 
-The current working tree contains additional, uncommitted purchase, inventory, attendance and payroll fixes based on `e6837e7`. `npm run lint`, the Vite production build, `npm test` (9 tests), and the complete Playwright suite (28 desktop/mobile Chromium tests) pass. Purchase PDF fixtures were generated as A4 documents with 1, 20 and 100 row pagination cases; product report amounts and totals were checked across all 71 pages. See preview PNGs in `output/pdf/previews/verification-2026-11-13-updated/` and fixture PDFs in `output/pdf/verification-2026-11-13/`.
+Commit `a4a5987` adds focused purchase, inventory, attendance and payroll fixes based on `e6837e7`. `npm run lint`, the Vite production build, `npm test` (9 tests), and the complete Playwright suite (28 desktop/mobile Chromium tests) pass. Purchase PDF fixtures were generated as A4 documents with 1, 20 and 100 row pagination cases; product report amounts and totals were checked across all 71 pages. See preview PNGs in `output/pdf/previews/verification-2026-11-13-updated/` and fixture PDFs in `output/pdf/verification-2026-11-13/`.
 
 This checkpoint is not a Windows installer test or production release. Marathi font fidelity, real printer output, comparison against saved owner records, and remaining phase acceptance checks are outstanding.
 

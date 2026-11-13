@@ -28,42 +28,42 @@ These checks ran on the pre-change source at `e6837e7`, with offline/local data.
 
 Playwright captures are under ignored `test-results/` from the baseline run. Visual review found an inventory register that can extend beyond the 1440px viewport, so the full data-table sizing and mobile table interaction still need focused verification.
 
-## Current implementation checkpoint (uncommitted from `e6837e7`)
+## Current implementation checkpoint (`a4a5987` on `main`, based on `e6837e7`)
 
 The next implementation slice fixes the purchase supplier lookup accepting stale IDs, makes discounted selling price part of inventory margin, and prevents monthly bulk attendance from replacing existing statuses or marking future dates. Regression coverage now checks those workflows on desktop and mobile. The purchase PDFs have been visually inspected after rendering to images, including the last page of the 1,552-row report and the final pages of 100-row invoice/register fixtures.
 
 | Check | Current result | Evidence / limit |
 | --- | --- | --- |
-| `npm run lint` | Pass, zero warnings | Re-run after the full Playwright suite completed |
+| `npm run lint` | Pass, zero warnings | Ran after the final 28-test Playwright run |
 | `npm test` | Pass, 9 tests | Two Vitest files; accounting unit coverage remains narrow |
 | `npm run build` | Pass | Offline/local release build; large main-bundle advisory remains |
 | `npx playwright test --workers=2` | Pass, 28 tests | Desktop and mobile Chromium; route smoke, input wheel, bill/label print surface, purchase save/reload/attachment/search/duplicate validation/PDFs/long rows, inventory supplier/category/margin, worker payroll/bonus and attendance boundary flows |
 | Purchase PDFs | Pass for tested fixtures | A4 portrait invoice (1, 2, and 8 pages for 1/20/100 long-text rows), A4 landscape register (1, 2, and 6 pages for 2/20/100 records), A4 landscape product report (71 pages / 1,552 products); logo repeats on every page, totals accompany final register rows, amount and totals are correct, no raw JSON. Marathi fidelity and physical printer output remain unverified. |
 
-Current source changes are uncommitted. `test-results/` contains ignored Playwright fixture artifacts. Copied, reviewed fixture PDFs are in `output/pdf/verification-2026-11-13/`, with first/last-page PNGs in `output/pdf/previews/verification-2026-11-13-updated/`; the earlier preview files are preserved.
+The source changes for this checkpoint are committed as `a4a5987`. `test-results/` contains ignored Playwright fixture artifacts. Copied, reviewed fixture PDFs are in `output/pdf/verification-2026-11-13/`, with first/last-page PNGs in `output/pdf/previews/verification-2026-11-13-updated/`; the earlier preview files are preserved.
 
 ## Phase status
 
-| Phase | Status | Current checkpoint |
-| --- | --- | --- |
-| 00 Audit and safety baseline | IN PROGRESS | References, project map, baseline checks reviewed. No database backup/restore verification or 4-viewport baseline set. |
-| 01 Shared design and data safety | IN PROGRESS | Shared branding, navigation and numeric wheel protection exist. Screen-reader, keyboard, dark-mode, sync conflict and RLS acceptance remain. |
-| 02 Purchase and A4 documents | IN PROGRESS | Desktop/mobile save/reload/view attachment, unmatched supplier rejection, duplicate invoice validation, supplier-name search and three A4 PDF exports pass. A4 invoice and register PDFs visually checked at 1/20/100 rows; totals remain with the last register rows and long text wraps. Attachment cloud-storage strategy/size, Marathi fidelity, physical printer, and comparison against owner-approved saved purchase records remain. |
-| 03 Inventory and catalog | IN PROGRESS | Desktop/mobile add and edit verify category, supplier/mobile, discount-aware margin and supplier filter. A4 1,552-product report has visible calculated amount and final totals. Historical source page-by-page reconciliation, product import review and further stock-ledger/variant cases remain. |
-| 04 Quotations | IN PROGRESS | Date/customer search and vector A4 PDF exist. Create/edit/convert and long-table print review remain. |
-| 05 Barcode labels | IN PROGRESS | Code 128 generation, SVG download and print surface exist. Device and sheet-print verification remain. |
-| 06 Billing / POS | IN PROGRESS | Tax-free bill creation and A4 print surface exist. Complete financial workflow and PDF review remain. |
-| 07 Bills and history | IN PROGRESS | Customer/date filters and payment action exist. Edit/view/return reconciliation and mobile acceptance remain. |
-| 08 Customers | IN PROGRESS | Directory, profiles, ledger, payments and plumber references exist. Search, account math and document acceptance remain. |
-| 09 Suppliers | IN PROGRESS | Separate name/mobile search, account and purchase history exist. Form validation, payment and PDF acceptance remain. |
-| 10 Plumbers | IN PROGRESS | Referral, commission, reward and payment history exist. Return reversal/carry-forward acceptance remains. |
-| 11 Workers / payroll | IN PROGRESS | Desktop/mobile tests verify settlement zeroes remaining base pay and preserves payment history, and bonus amount/date bounds persist. Broader pay-cycle, partial payment and payslip cases remain. |
-| 12 Attendance | IN PROGRESS | Desktop/mobile monthly bulk test preserves recorded statuses and skips future dates. Daily/month grid editing, leave, payroll links and A4 reports remain. |
-| 13 Pat Sanstha | IN PROGRESS | Multiple plans and plan-specific amounts exist. Same-day plan entries and period reports need end-to-end review. |
-| 14 Returns | IN PROGRESS | Revised bills, stock reversal, refund ledger and plumber adjustment code exist. Partial/full return and financial reconciliation remain. |
-| 15 Expenses | IN PROGRESS | Personal/shop classification and three export actions exist. CRUD, date filters and totals remain to verify. |
-| 16 Dashboard / shared operations | IN PROGRESS | Dashboard, settings, notifications and report exports exist. All period boundaries, navigation and device views remain to verify. |
-| 17 Windows and web release | IN PROGRESS | Build/release workflows exist. Installer, actual device verification and authorized deployment are outstanding. |
+| Phase | Status | Commit | Current checkpoint |
+| --- | --- | --- | --- |
+| 00 Audit and safety baseline | IN PROGRESS | `a4a5987` | References, project map, baseline checks reviewed. No database backup/restore verification or 4-viewport baseline set. |
+| 01 Shared design and data safety | IN PROGRESS | `e6837e7` | Shared branding, navigation and numeric wheel protection exist. Screen-reader, keyboard, dark-mode, sync conflict and RLS acceptance remain. |
+| 02 Purchase and A4 documents | IN PROGRESS | `a4a5987` | Desktop/mobile save/reload/view attachment, unmatched supplier rejection, duplicate invoice validation, supplier-name search and three A4 PDF exports pass. A4 invoice and register PDFs visually checked at 1/20/100 rows; totals remain with the last register rows and long text wraps. Attachment cloud-storage strategy/size, Marathi fidelity, physical printer, and comparison against owner-approved saved purchase records remain. |
+| 03 Inventory and catalog | IN PROGRESS | `a4a5987` | Desktop/mobile add and edit verify category, supplier/mobile, discount-aware margin and supplier filter. A4 1,552-product report has visible calculated amount and final totals. Historical source page-by-page reconciliation, product import review and further stock-ledger/variant cases remain. |
+| 04 Quotations | IN PROGRESS | `e6837e7` | Date/customer search and vector A4 PDF exist. Create/edit/convert and long-table print review remain. |
+| 05 Barcode labels | IN PROGRESS | `e6837e7` | Code 128 generation, SVG download and print surface exist. Device and sheet-print verification remain. |
+| 06 Billing / POS | IN PROGRESS | `e6837e7` | Tax-free bill creation and A4 print surface exist. Complete financial workflow and PDF review remain. |
+| 07 Bills and history | IN PROGRESS | `e6837e7` | Customer/date filters and payment action exist. Edit/view/return reconciliation and mobile acceptance remain. |
+| 08 Customers | IN PROGRESS | `e6837e7` | Directory, profiles, ledger, payments and plumber references exist. Search, account math and document acceptance remain. |
+| 09 Suppliers | IN PROGRESS | `e6837e7` | Separate name/mobile search, account and purchase history exist. Form validation, payment and PDF acceptance remain. |
+| 10 Plumbers | IN PROGRESS | `e6837e7` | Referral, commission, reward and payment history exist. Return reversal/carry-forward acceptance remains. |
+| 11 Workers / payroll | IN PROGRESS | `a4a5987` | Desktop/mobile tests verify settlement zeroes remaining base pay and preserves payment history, and bonus amount/date bounds persist. Broader pay-cycle, partial payment and payslip cases remain. |
+| 12 Attendance | IN PROGRESS | `a4a5987` | Desktop/mobile monthly bulk test preserves recorded statuses and skips future dates. Daily/month grid editing, leave, payroll links and A4 reports remain. |
+| 13 Pat Sanstha | IN PROGRESS | `e6837e7` | Multiple plans and plan-specific amounts exist. Same-day plan entries and period reports need end-to-end review. |
+| 14 Returns | IN PROGRESS | `e6837e7` | Revised bills, stock reversal, refund ledger and plumber adjustment code exist. Partial/full return and financial reconciliation remain. |
+| 15 Expenses | IN PROGRESS | `e6837e7` | Personal/shop classification and three export actions exist. CRUD, date filters and totals remain to verify. |
+| 16 Dashboard / shared operations | IN PROGRESS | `e6837e7` | Dashboard, settings, notifications and report exports exist. All period boundaries, navigation and device views remain to verify. |
+| 17 Windows and web release | IN PROGRESS | `e6837e7` | Build/release workflows exist. Installer, actual device verification and authorized deployment are outstanding. |
 
 ## Current implementation activity
 
