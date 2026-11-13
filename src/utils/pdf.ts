@@ -8,7 +8,8 @@ import { formatCurrency, formatDate } from './format'
 export type PdfRow = Record<string, string | number | null | undefined>
 type ReportDetails = { businessName?: string; address?: string; mobile?: string; email?: string; gstin?: string }
 const safeFilename = (value: string) => value.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'report'
-const displayValue = (value: unknown) => value === null || value === undefined || value === '' ? '—' : String(value).replace(/₹\s?/gu, 'Rs. ')
+const pdfSafeText = (value: string) => value.replace(/[·•\u2010-\u2015\u2212]/gu, '-').replace(/\u00a0/gu, ' ')
+const displayValue = (value: unknown) => value === null || value === undefined || value === '' ? '-' : pdfSafeText(String(value).replace(/₹\s?/gu, 'Rs. '))
 // jsPDF's built-in Helvetica does not contain the Indian rupee glyph. Use an
 // explicit currency label in exported PDFs so print and preview always agree.
 const pdfCurrency = (value: number) => formatCurrency(value).replace(/^₹\s*/u, 'Rs. ')
@@ -30,13 +31,13 @@ function brandHeader(doc: jsPDF, title: string, details: ReportDetails, landscap
  doc.setFillColor(...orange); doc.rect(0, 48, width, 1.4, 'F')
  if (logo) { try { doc.addImage(logo, 'PNG', margin, 4.5, 23, 23, undefined, 'FAST') } catch { /* allow exports if the logo is not a PNG */ } }
  const x = logo ? 41 : margin
- doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(17); doc.text(details.businessName || 'VINAY TRADERS', x, 12)
- doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.text('Hardware & Plumbing Supplies', x, 18)
  const detailsWidth = Math.max(35, width - x - margin - width * .33 - 5)
- const businessLines = [details.address, details.mobile, details.email].filter((line): line is string => Boolean(line)).flatMap(line => doc.splitTextToSize(line, detailsWidth))
+ const businessLines = [details.address, details.mobile, details.email].filter((line): line is string => Boolean(line)).flatMap(line => doc.splitTextToSize(pdfSafeText(line), detailsWidth))
+ doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(17); doc.text(pdfSafeText(details.businessName || 'VINAY TRADERS'), x, 12)
+ doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.text('Hardware & Plumbing Supplies', x, 18)
  doc.setFontSize(6.7); doc.text(businessLines.slice(0, 6), x, 24)
- doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text(title.toUpperCase(), width - margin, 12, { align: 'right', maxWidth: width * .33 })
- doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(meta || `Generated ${new Date().toLocaleString('en-IN')}`, width - margin, 22, { align: 'right' })
+ doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text(pdfSafeText(title.toUpperCase()), width - margin, 12, { align: 'right', maxWidth: width * .33 })
+ doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(pdfSafeText(meta || `Generated ${new Date().toLocaleString('en-IN')}`), width - margin, 22, { align: 'right' })
  return { width, margin, startY: landscape ? 56 : 54 }
 }
 
@@ -46,7 +47,7 @@ function footer(doc: jsPDF, details: ReportDetails) {
   doc.setPage(page); const width = doc.internal.pageSize.getWidth(), height = doc.internal.pageSize.getHeight()
   doc.setDrawColor(205, 215, 227); doc.setLineWidth(.25); doc.line(13, height - 10, width - 13, height - 10)
   doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(92, 105, 122)
-  doc.text(`${details.businessName || 'Vinay Traders'}  ·  Computer generated document`, 13, height - 6)
+  doc.text(`${pdfSafeText(details.businessName || 'Vinay Traders')}  |  Computer generated document`, 13, height - 6)
   doc.text(`Page ${page} of ${total}`, width - 13, height - 6, { align: 'right' })
  }
 }
@@ -90,17 +91,17 @@ export async function printPdfReport(title: string, rows: PdfRow[], details?: Re
 /** A4 portrait supplier purchase invoice, with clear supplier, products, payment and totals sections. */
 export async function purchaseInvoicePdf(purchase: Purchase, supplier: Supplier | undefined, details: ReportDetails) {
  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' }), logo = await logoData()
- const shop = { businessName: 'VINAY TRADERS', address: 'Shirala, Maharashtra', ...details }, { width, margin } = brandHeader(doc, 'Purchase Invoice', shop, false, logo, `Purchase ${purchase.number}  ·  ${formatDate(purchase.invoiceDate || purchase.date)}`)
+ const shop = { businessName: 'VINAY TRADERS', address: 'Shirala, Maharashtra', ...details }, { width, margin } = brandHeader(doc, 'Purchase Invoice', shop, false, logo, `Purchase ${purchase.number}  |  ${formatDate(purchase.invoiceDate || purchase.date)}`)
  const cardTop = 55, half = (width - 2 * margin - 5) / 2
  const supplierLines = [supplier?.name || 'Supplier not available', supplier?.mobile ? `Mobile: ${supplier.mobile}` : '', supplier?.address || ''].filter(Boolean)
  const purchaseLines = [
-  `Purchase No.: ${purchase.number}`, `Supplier invoice: ${purchase.supplierInvoice || '—'}`,
+  `Purchase No.: ${purchase.number}`, `Supplier invoice: ${purchase.supplierInvoice || '-'}`,
   `Invoice date: ${formatDate(purchase.invoiceDate || purchase.date)}`,
   `Due date: ${formatDate(purchase.dueDate)}`, `Payment type: ${purchase.paymentMethod}`,
   `Status: ${Number(purchase.totals?.due) <= 0 ? 'Paid' : Number(purchase.totals?.paid) > 0 ? 'Partial' : 'Due'}`,
  ]
  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5)
- const wrap = (values:string[]) => values.flatMap(value => doc.splitTextToSize(value, half - 7) as string[])
+ const wrap = (values:string[]) => values.flatMap(value => doc.splitTextToSize(pdfSafeText(value), half - 7) as string[])
  const leftLines=wrap(supplierLines), rightLines=wrap(purchaseLines)
  const cardHeight=Math.max(44, 13+Math.max(leftLines.length,rightLines.length)*4.7)
  doc.setDrawColor(198, 211, 227); doc.setFillColor(246, 249, 253)
@@ -113,20 +114,20 @@ export async function purchaseInvoicePdf(purchase: Purchase, supplier: Supplier 
  leftLines.forEach((line, index) => doc.text(line, margin+3, cardTop+12+index*4.7))
  rightLines.forEach((line, index) => doc.text(line, margin+half+8, cardTop+12+index*4.7))
  const items = Array.isArray(purchase.items) ? purchase.items : []
- autoTable(doc, { startY: cardTop + cardHeight + 6, head: [['Sr.', 'Product', 'Variant / Size', 'Qty', 'Unit', 'Rate', 'Discount', 'Amount']], body: items.map((item, i) => [i + 1, item.name, item.variant || '—', item.quantity, item.unit, pdfCurrency(item.rate), `${item.discount || 0}%`, pdfCurrency(item.quantity * item.rate * (1 - (item.discount || 0) / 100))]), styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak', lineColor: [205, 215, 227], lineWidth: .2 }, headStyles: { fillColor: blue, textColor: [255, 255, 255], fontStyle: 'bold' }, alternateRowStyles: { fillColor: [246, 249, 253] }, columnStyles: { 0: { cellWidth: 9 }, 1: { cellWidth: 39 }, 2: { cellWidth: 30 }, 3: { cellWidth: 13, halign: 'right' }, 4: { cellWidth: 14 }, 5: { cellWidth: 23, halign: 'right' }, 6: { cellWidth: 18, halign: 'right' }, 7: { halign: 'right' } }, margin: { left: margin, right: margin, top: 54, bottom: 16 }, showHead: 'everyPage', willDrawPage: () => { if (currentPageNumber(doc) > 1) brandHeader(doc, 'Purchase Invoice', shop, false, logo, `Purchase ${purchase.number}  ·  ${formatDate(purchase.invoiceDate || purchase.date)}`) } })
+ autoTable(doc, { startY: cardTop + cardHeight + 6, head: [['Sr.', 'Product', 'Variant / Size', 'Qty', 'Unit', 'Rate', 'Discount', 'Amount']], body: items.map((item, i) => [i + 1, pdfSafeText(item.name), pdfSafeText(item.variant || '-'), item.quantity, item.unit, pdfCurrency(item.rate), `${item.discount || 0}%`, pdfCurrency(item.quantity * item.rate * (1 - (item.discount || 0) / 100))]), styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak', lineColor: [205, 215, 227], lineWidth: .2 }, headStyles: { fillColor: blue, textColor: [255, 255, 255], fontStyle: 'bold' }, alternateRowStyles: { fillColor: [246, 249, 253] }, columnStyles: { 0: { cellWidth: 9 }, 1: { cellWidth: 39 }, 2: { cellWidth: 30 }, 3: { cellWidth: 13, halign: 'right' }, 4: { cellWidth: 14 }, 5: { cellWidth: 23, halign: 'right' }, 6: { cellWidth: 18, halign: 'right' }, 7: { halign: 'right' } }, margin: { left: margin, right: margin, top: 54, bottom: 16 }, showHead: 'everyPage', willDrawPage: () => { if (currentPageNumber(doc) > 1) brandHeader(doc, 'Purchase Invoice', shop, false, logo, `Purchase ${purchase.number}  |  ${formatDate(purchase.invoiceDate || purchase.date)}`) } })
  let y = ((doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? 100) + 7
  const totals = purchase.totals ?? { subtotal: 0, discount: 0, grandTotal: 0, paid: 0, due: 0 }
  // Keep the summary, remarks and signature block together instead of leaving
  // only remarks/signatures stranded at the bottom of a mostly empty page.
- if (y + 55 > 250) { doc.addPage(); brandHeader(doc, 'Purchase Invoice', shop, false, logo, `Purchase ${purchase.number}  ·  ${formatDate(purchase.invoiceDate || purchase.date)}`); y = 60 }
+ if (y + 55 > 250) { doc.addPage(); brandHeader(doc, 'Purchase Invoice', shop, false, logo, `Purchase ${purchase.number}  |  ${formatDate(purchase.invoiceDate || purchase.date)}`); y = 60 }
  const x = width - margin - 77
  doc.setDrawColor(198, 211, 227); doc.roundedRect(x, y, 77, 40, 2, 2)
  const summary = [['Subtotal', totals.subtotal], ['Discount', totals.discount], ['Grand total', totals.grandTotal], ['Paid', totals.paid], ['Due', totals.due]] as const
  summary.forEach(([label, amount], i) => { const yy = y + 7 + i * 6.4; if (label === 'Grand total') { doc.setFillColor(...orange); doc.roundedRect(x + .4, yy - 4.4, 76.2, 6.6, 1, 1, 'F') }; doc.setFont('helvetica', label === 'Grand total' ? 'bold' : 'normal'); doc.setFontSize(8.5); doc.setTextColor(...(label === 'Grand total' ? blue : [35, 48, 62] as [number, number, number])); doc.text(label, x + 4, yy); doc.text(pdfCurrency(amount), x + 73, yy, { align: 'right' }) })
  doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(70, 80, 93)
- const remarksLines = doc.splitTextToSize(`Remarks: ${purchase.notes || '—'}`, width - 2 * margin)
+ const remarksLines = doc.splitTextToSize(pdfSafeText(`Remarks: ${purchase.notes || '-'}`), width - 2 * margin)
  let remarksY = y + 48
- if (remarksY + remarksLines.length * 4 > 250) { doc.addPage(); brandHeader(doc, 'Purchase Invoice', shop, false, logo, `Purchase ${purchase.number}  ·  ${formatDate(purchase.invoiceDate || purchase.date)}`); remarksY = 60 }
+ if (remarksY + remarksLines.length * 4 > 250) { doc.addPage(); brandHeader(doc, 'Purchase Invoice', shop, false, logo, `Purchase ${purchase.number}  |  ${formatDate(purchase.invoiceDate || purchase.date)}`); remarksY = 60 }
  doc.text(remarksLines, margin, remarksY)
  const signatureY = 264, lineWidth = (width - 2 * margin - 24) / 2
  doc.setDrawColor(128, 141, 159); doc.line(margin, signatureY, margin + lineWidth, signatureY); doc.line(width - margin - lineWidth, signatureY, width - margin, signatureY)
@@ -136,7 +137,7 @@ export async function purchaseInvoicePdf(purchase: Purchase, supplier: Supplier 
  const pageCount = doc.getNumberOfPages()
  for (let page = 1; page <= pageCount; page++) {
   doc.setPage(page)
-  brandHeader(doc, 'Purchase Invoice', shop, false, logo, `Purchase ${purchase.number}  ·  ${formatDate(purchase.invoiceDate || purchase.date)}`)
+  brandHeader(doc, 'Purchase Invoice', shop, false, logo, `Purchase ${purchase.number}  |  ${formatDate(purchase.invoiceDate || purchase.date)}`)
  }
  footer(doc, shop); download(doc, `purchase-invoice-${purchase.number}`)
 }
@@ -147,10 +148,10 @@ export async function purchaseRegisterPdf(rows: PdfRow[], details: ReportDetails
   const paid = Number(row.Paid) || 0, due = Number(row.Due) || 0
   return {
    'Sr. No.': row['Sr. No.'] ?? index + 1,
-   'Purchase No.': row['Purchase No.'] ?? '—',
-   Date: row.Date ?? '—',
-   Supplier: row.Supplier ?? '—',
-   'Supplier Invoice No.': row['Supplier Invoice No.'] ?? '—',
+   'Purchase No.': row['Purchase No.'] ?? '-',
+   Date: row.Date ?? '-',
+   Supplier: row.Supplier ?? '-',
+   'Supplier Invoice No.': row['Supplier Invoice No.'] ?? '-',
    'Items Count': row['Items Count'] ?? 0,
    'Grand total': pdfCurrency(Number(row['Grand total']) || 0),
    Paid: pdfCurrency(paid),
@@ -162,7 +163,7 @@ export async function purchaseRegisterPdf(rows: PdfRow[], details: ReportDetails
 }
 
 export async function productPurchaseReportPdf(products: Product[], details: ReportDetails) {
- const rows = products.map((product, index) => ({ 'Sr. No.': index + 1, Product: product.name, 'Variant / Size': product.variant || product.size || '—', Qty: product.stock, Unit: product.salesUnit, Rate: pdfCurrency(product.purchaseRate), Amount: pdfCurrency(product.stock * product.purchaseRate) }))
+ const rows = products.map((product, index) => ({ 'Sr. No.': index + 1, Product: product.name, 'Variant / Size': product.variant || product.size || '-', Qty: product.stock, Unit: product.salesUnit, Rate: pdfCurrency(product.purchaseRate), Amount: pdfCurrency(product.stock * product.purchaseRate) }))
  const totalQuantity = products.reduce((sum, product) => sum + product.stock, 0), totalAmount = products.reduce((sum, product) => sum + product.stock * product.purchaseRate, 0)
  return printPdfReport('Product / Purchase Report', rows, details, { orientation: 'landscape', columnWidths: [11,63,61,25,26,43,35], summary: { 'Total products': products.length, 'Total quantity': totalQuantity, 'Grand total amount': pdfCurrency(totalAmount) } })
 }
@@ -182,19 +183,19 @@ export async function workerPayslipPdf(
  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
  const logo = await logoData()
  const { width, margin } = brandHeader(doc, 'SALARY SLIP', shop, false, logo, period)
- const safePeriod = /^\d{4}-\d{2}$/.test(period) ? period : '—'
+ const safePeriod = /^\d{4}-\d{2}$/.test(period) ? period : '-'
  const paymentRows = payments
   .filter(row => row.entityType === 'worker' && row.entityId === worker.id && (row.kind ?? 'Payment') === 'Payment' && (row.period ?? row.date.slice(0, 7)) === period)
   .sort((a, b) => a.date.localeCompare(b.date))
  const payType = worker.salaryType === 'Monthly Fixed' ? 'Monthly fixed' : 'Daily wage'
  const detailRows = [
-  ['Worker', worker.name], ['Role', worker.role || '—'],
+  ['Worker', worker.name], ['Role', worker.role || '-'],
   ['Pay period', safePeriod], ['Salary type', payType],
   ['Attendance', String(payroll.present) + ' present; ' + String(payroll.paidDays) + ' paid days'],
   ['Payment status', payroll.balance <= .001 ? 'Paid / Settled' : payroll.paid > 0 ? 'Part-paid' : 'Pending']
  ]
  autoTable(doc, {
-  startY: 56, body: detailRows,
+  startY: 56, body: detailRows.map(row => row.map(pdfSafeText)),
   theme: 'grid', styles: { fontSize: 9, cellPadding: 3, lineColor: [214, 226, 240], lineWidth: .2 },
   columnStyles: { 0: { cellWidth: 43, fillColor: [244, 248, 253], textColor: blue, fontStyle: 'bold' }, 1: { cellWidth: width - 2 * margin - 43 } },
   margin: { left: margin, right: margin }
@@ -211,7 +212,7 @@ export async function workerPayslipPdf(
   ['Other deductions', '- ' + pdfCurrency(payroll.deduction)]
  ]
  autoTable(doc, {
-  startY: y, body: payRows, theme: 'grid',
+  startY: y, body: payRows.map(row => row.map(pdfSafeText)), theme: 'grid',
   styles: { fontSize: 9, cellPadding: 3, lineColor: [214, 226, 240], lineWidth: .2 },
   columnStyles: { 0: { cellWidth: 112 }, 1: { halign: 'right', fontStyle: 'bold' } },
   alternateRowStyles: { fillColor: [246, 249, 253] },
@@ -226,11 +227,11 @@ export async function workerPayslipPdf(
  doc.setTextColor(...blue); doc.setFontSize(11); doc.text('PAYMENTS RECORDED', margin, y)
  y += 3
  const paymentTable = paymentRows.length
-  ? paymentRows.map(row => [formatDate(row.date), row.method, row.reference || '—', pdfCurrency(row.amount)])
-  : [['—', '—', 'No payments for this period', pdfCurrency(0)]]
+  ? paymentRows.map(row => [formatDate(row.date), row.method, row.reference || '-', pdfCurrency(row.amount)])
+  : [['-', '-', 'No payments for this period', pdfCurrency(0)]]
  autoTable(doc, {
   startY: y, head: [['Date', 'Method', 'Reference', 'Amount paid']],
-  body: paymentTable, theme: 'grid',
+  body: paymentTable.map(row => row.map(pdfSafeText)), theme: 'grid',
   styles: { fontSize: 8.5, cellPadding: 2.7, overflow: 'linebreak', lineColor: [214, 226, 240], lineWidth: .2 },
   headStyles: { fillColor: blue, textColor: [255, 255, 255] },
   alternateRowStyles: { fillColor: [246, 249, 253] },
@@ -286,11 +287,11 @@ export async function returnComparisonPdf(original: Invoice, revised: Invoice, r
   doc.text(title, margin+4, start+6)
   doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(35,48,62)
   const info = 'Bill ' + bill.number + '  |  ' + formatDate(bill.date) + '  |  Customer: ' + bill.customerName
-  doc.text(doc.splitTextToSize(info, width - 2 * margin), margin, start + 15)
+  doc.text(doc.splitTextToSize(pdfSafeText(info), width - 2 * margin), margin, start + 15)
   autoTable(doc, {
    startY: start+21,
    head: [['#','Product','Variant','Qty','Unit','Rate','Amount']],
-   body: bill.items.map((item,index)=>[index+1,item.name,item.variant||'—',item.quantity,item.unit,pdfCurrency(item.rate),pdfCurrency(item.quantity*item.rate*(1-(item.discount||0)/100))]),
+   body: bill.items.map((item,index)=>[index+1,pdfSafeText(item.name),pdfSafeText(item.variant||'-'),item.quantity,item.unit,pdfCurrency(item.rate),pdfCurrency(item.quantity*item.rate*(1-(item.discount||0)/100))]),
    theme:'grid',
    styles:{fontSize:8,cellPadding:2.3,overflow:'linebreak',lineColor:[209,220,234],lineWidth:.2},
    headStyles:{fillColor:blue,textColor:[255,255,255]},
@@ -314,16 +315,17 @@ export async function returnComparisonPdf(original: Invoice, revised: Invoice, r
  }
  y = section('ORIGINAL BILL - BEFORE RETURN', original, y)
  y = section('REVISED BILL - AFTER RETURN', revised, y)
- if(y>230){doc.addPage();brandHeader(doc,'BILL RETURN & REVISION',shop,false,logo,record.number);y=59}
+ if(y>222){doc.addPage();brandHeader(doc,'BILL RETURN & REVISION',shop,false,logo,record.number);y=59}
  doc.setFillColor(247,249,252);doc.setDrawColor(204,216,230)
- doc.roundedRect(margin,y,width-2*margin,30,2,2,'FD')
+ doc.roundedRect(margin,y,width-2*margin,38,2,2,'FD')
  doc.setTextColor(...blue);doc.setFont('helvetica','bold');doc.setFontSize(9)
  doc.text('RETURN & REFUND ACCOUNT',margin+4,y+7)
  doc.setFont('helvetica','normal');doc.setTextColor(39,52,69)
  doc.text('Items returned: '+record.items.reduce((sum,item)=>sum+item.quantity,0),margin+4,y+15)
  doc.text('Return amount: '+pdfCurrency(record.amount),width-margin-4,y+15,{align:'right'})
- doc.text('Refund recorded: '+pdfCurrency(record.refundPaid??0),margin+4,y+22)
- doc.text('Refund still due: '+pdfCurrency(Math.max(0,(record.refundDue??0)-(record.refundPaid??0))),width-margin-4,y+22,{align:'right'})
+ doc.text('Commission reversed: '+pdfCurrency(record.commissionReversed),margin+4,y+23)
+ doc.text('Refund recorded: '+pdfCurrency(record.refundPaid??0),width-margin-4,y+23,{align:'right'})
+ doc.text('Refund still due: '+pdfCurrency(Math.max(0,(record.refundDue??0)-(record.refundPaid??0))),margin+4,y+31)
  footer(doc,shop)
  download(doc,'return-comparison-'+original.number)
 }
@@ -340,14 +342,14 @@ export async function quotationPdf(quote: Quotation, details: ReportDetails) {
  doc.text('CUSTOMER', margin + 4, 62)
  doc.text('QUOTATION DETAILS', margin + w * .52, 62)
  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.3); doc.setTextColor(39, 52, 69)
- const customerLines = [quote.customerName || 'Walk-in customer', quote.customerMobile ? 'Mobile: ' + quote.customerMobile : '', quote.customerAddress || ''].filter(Boolean).flatMap(line => doc.splitTextToSize(line, w * .45))
+ const customerLines = [quote.customerName || 'Walk-in customer', quote.customerMobile ? 'Mobile: ' + quote.customerMobile : '', quote.customerAddress || ''].filter(Boolean).flatMap(line => doc.splitTextToSize(pdfSafeText(line), w * .45))
  doc.text(customerLines.slice(0, 5), margin + 4, 69)
  ;['Number: ' + quote.number, 'Date: ' + formatDate(quote.date), 'Valid until: ' + formatDate(quote.validUntil), 'Status: ' + quote.status]
-  .forEach((line,i) => doc.text(line, margin + w * .52, 69 + i * 5, { maxWidth: w * .44 }))
+  .forEach((line,i) => doc.text(pdfSafeText(line), margin + w * .52, 69 + i * 5, { maxWidth: w * .44 }))
  autoTable(doc, {
   startY: 101,
   head: [['Sr.', 'Product', 'Variant / Size', 'Qty', 'Unit', 'Rate', 'Discount', 'Amount']],
-  body: quote.items.map((item,i) => [i+1,item.name,item.variant||'—',item.quantity,item.unit,pdfCurrency(item.rate),String(item.discount||0)+'%',pdfCurrency(item.quantity*item.rate*(1-(item.discount||0)/100))]),
+  body: quote.items.map((item,i) => [i+1,pdfSafeText(item.name),pdfSafeText(item.variant||'-'),item.quantity,item.unit,pdfCurrency(item.rate),String(item.discount||0)+'%',pdfCurrency(item.quantity*item.rate*(1-(item.discount||0)/100))]),
   theme: 'grid',
   styles: { fontSize:8,cellPadding:2.1,overflow:'linebreak',lineColor:[208,219,233],lineWidth:.2 },
   headStyles: { fillColor:blue,textColor:[255,255,255],fontStyle:'bold' },
@@ -358,7 +360,7 @@ export async function quotationPdf(quote: Quotation, details: ReportDetails) {
   willDrawPage: () => { if (currentPageNumber(doc)>1) brandHeader(doc,'QUOTATION',shop,false,logo,quote.number) }
  })
  let y = ((doc as jsPDF & { lastAutoTable?: { finalY?:number } }).lastAutoTable?.finalY ?? 111)+8
- const notes=doc.splitTextToSize('Notes: '+(quote.notes||'—'),w*.54)
+ const notes=doc.splitTextToSize(pdfSafeText('Notes: '+(quote.notes||'-')),w*.54)
  if(y+Math.max(notes.length*4,36)>265){doc.addPage();brandHeader(doc,'QUOTATION',shop,false,logo,quote.number);y=60}
  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(55,66,82)
  doc.text(notes,margin,y+3)
