@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { initialData } from '../../src/mock-data'
+import { calculateInvoiceTotals } from '../../src/utils/invoice'
 
 test.beforeEach(async ({ page }) => {
   // Browser tests use seeded mock records in an isolated client-only workspace;
@@ -24,6 +25,40 @@ test('customer bill uses Bill wording and prints on A4', async ({ page }, info) 
   expect(output.subarray(0, 5).toString()).toBe('%PDF-')
   expect(output.length).toBeGreaterThan(9000)
   await page.screenshot({ path: info.outputPath('bill-a4-print-preview.png'), animations: 'disabled' })
+})
+
+test('long customer bills retain readable columns and paginate on A4', async ({ page }, info) => {
+  const invoice = structuredClone(initialData.invoices[0])
+  invoice.id = 'bill-long-a4-fixture'
+  invoice.items = Array.from({ length: 60 }, (_, index) => ({
+    ...invoice.items[0], id: `long-bill-line-${index + 1}`, quantity: 1, rate: 100, discount: 10,
+    name: `Plumbing product ${String(index + 1).padStart(2, '0')} with a detailed specification for professional hot and cold water installations`,
+    variant: 'Heavy duty fitting / 25 mm / 3 Meter / navy reference',
+  }))
+  invoice.totals = calculateInvoiceTotals(invoice.items, { paid: 1250 })
+  invoice.paymentStatus = 'Partial'
+  await page.addInitScript(fixture => {
+    const data = JSON.parse(localStorage.getItem('vinay-traders-client-data-v2') ?? '{}')
+    data.invoices.unshift(fixture)
+    localStorage.setItem('vinay-traders-client-data-v2', JSON.stringify(data))
+  }, invoice)
+  await page.goto(`/billing/invoices/${invoice.id}`)
+  await expect(page.locator('.invoice-paper tbody tr')).toHaveCount(60)
+  await page.emulateMedia({ media: 'print' })
+  const paper = page.locator('.invoice-paper')
+  const layout = await paper.evaluate(element => ({
+    page: getComputedStyle(element).page,
+    overflow: getComputedStyle(element).overflow,
+    headerWidth: element.querySelector('thead th:nth-child(2)')!.getBoundingClientRect().width,
+    serialWidth: element.querySelector('thead th')!.getBoundingClientRect().width,
+    variantFontSize: getComputedStyle(element.querySelector('tbody small')!).fontSize,
+  }))
+  expect(layout).toMatchObject({ page: 'vinay-bill', overflow: 'visible', variantFontSize: '12px' })
+  expect(layout.headerWidth).toBeGreaterThan(layout.serialWidth * 4)
+  const output = await page.pdf({ path: info.outputPath('customer-bill-60-rows-a4.pdf'), format: 'A4', printBackground: true, preferCSSPageSize: true })
+  const pages = output.toString('latin1').match(/\/Type\s*\/Page\b/gu) ?? []
+  expect(pages.length).toBeGreaterThan(2)
+  expect(pages.length).toBeLessThan(9)
 })
 
 test('barcode labels save unit settings, print on A4, and can be found by scanning', async ({ page }, info) => {

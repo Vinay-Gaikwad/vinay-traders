@@ -46,17 +46,21 @@ function consumeStock(product: Product, quantity: number, allowNegative: boolean
  return { ...product, stock: Math.round((product.stock - quantity) * 10000) / 10000, batches }
 }
 export function createInvoice(data: AppData, input: InvoiceInput): AppData {
- validateItems(data, input.items, true)
  const existing = input.id ? data.invoices.find(invoice => invoice.id === input.id) : undefined
- const quotation = input.quotationId ? data.quotations.find(entry => entry.id === input.quotationId) : undefined
- if (input.quotationId && !quotation) throw new Error('Quotation not found.')
- if (input.quotationId && quotation?.convertedInvoiceId && quotation.convertedInvoiceId !== input.id) throw new Error(`${quotation.number} has already been converted to a bill.`)
+ const status = input.status ?? 'Completed'
+ if (!['Draft', 'Held', 'Completed'].includes(status)) throw new Error('Use the sales return workflow to revise or return a bill.')
+ if (existing?.status === 'Revised' || existing?.status === 'Returned') throw new Error('Historical returned bills cannot be edited. Open the current revised bill instead.')
+ if (existing?.status === 'Completed' && status !== 'Completed') throw new Error('A completed bill cannot be changed back to a draft or held bill.')
+ validateItems(data, input.items, true)
+ const quotationId = input.quotationId ?? existing?.quotationId
+ const quotation = quotationId ? data.quotations.find(entry => entry.id === quotationId) : undefined
+ if (quotationId && !quotation) throw new Error('Quotation not found.')
+ if (quotationId && quotation?.convertedInvoiceId && quotation.convertedInvoiceId !== input.id) throw new Error(`${quotation.number} has already been converted to a bill.`)
  const customer = input.customerId ? data.customers.find(entry => entry.id === input.customerId) : undefined
  if (input.customerId && !customer) throw new Error('Select a valid customer.')
  const plumber = input.plumberId ? data.plumbers.find(entry => entry.id === input.plumberId) : undefined
  if (input.plumberId && (!plumber || plumber.status !== 'Active')) throw new Error('Select an active plumber.')
- const status = input.status ?? 'Completed'
- const previousBalance = existing && customer?.id === existing.customerId ? Math.max(0, (customer?.balance ?? 0) - existing.totals.due) : customer?.balance ?? 0
+ const previousBalance = existing?.status === 'Completed' && customer?.id === existing.customerId ? Math.max(0, (customer?.balance ?? 0) - existing.totals.due) : customer?.balance ?? 0
  // Vinay Traders is tax-free: legacy settings must never add GST to new customer bills.
  const totals = calculateInvoiceTotals(input.items, { paid: input.paid, previousBalance, roundOff: data.settings.roundOff, gstEnabled: false })
  if (status === 'Completed') {
@@ -65,12 +69,12 @@ export function createInvoice(data: AppData, input: InvoiceInput): AppData {
   if (customer && totals.due > 0 && previousBalance + totals.due > customer.creditLimit) throw new Error(`Credit limit exceeded for ${customer.name}. Available credit: ₹${Math.max(0, customer.creditLimit - previousBalance)}.`)
  }
  const next = structuredClone(data)
- const id = input.id ?? uid('invoice'), date = input.date ?? new Date().toISOString()
+ const id = input.id ?? uid('invoice'), date = existing?.date ?? input.date ?? new Date().toISOString()
  const number = existing?.number ?? `${data.settings.invoicePrefix}-${data.settings.nextInvoiceNumber}`
  const commissionRate = plumber?.commissionRate ?? 0
  const commission = status === 'Completed' ? commissionForItems(input.items, totals, commissionRate, data.settings, data.products) : 0
  const rewardAmount = roundMoney(commission * (plumber?.rewardRate ?? 0) / 100)
- const invoice = { id, number, date, dueDate: input.dueDate ?? (totals.due > 0 ? date.slice(0, 10) : undefined), customerId: customer?.id, customerName: customer?.name ?? (input.customerName?.trim() || 'Walk-in customer'), customerMobile: customer?.mobile ?? input.customerMobile, customerAddress: customer?.address ?? input.customerAddress, plumberId: plumber?.id, items: structuredClone(input.items), totals, initialPaid: totals.paid, paymentMethod: input.paymentMethod, payments: input.payments, paymentStatus: paymentStatus(totals.grandTotal, totals.paid, input.paymentMethod), status, commission, commissionRate, commissionBasis: data.settings.commissionBasis, notes: input.notes ?? '', createdBy: 'Vinay Gaikwad' }
+ const invoice = { id, number, date, dueDate: input.dueDate ?? (totals.due > 0 ? date.slice(0, 10) : undefined), quotationId, customerId: customer?.id, customerName: customer?.name ?? (input.customerName?.trim() || 'Walk-in customer'), customerMobile: customer?.mobile ?? input.customerMobile, customerAddress: customer?.address ?? input.customerAddress, plumberId: plumber?.id, items: structuredClone(input.items), totals, initialPaid: totals.paid, paymentMethod: input.paymentMethod, payments: input.payments, paymentStatus: paymentStatus(totals.grandTotal, totals.paid, input.paymentMethod), status, commission, commissionRate, commissionBasis: data.settings.commissionBasis, notes: input.notes ?? '', createdBy: existing?.createdBy ?? 'Vinay Gaikwad' }
  next.invoices = [invoice, ...next.invoices.filter(entry => entry.id !== id)]
  if (!existing) next.settings.nextInvoiceNumber += 1
  if (status !== 'Completed') return next
@@ -181,6 +185,7 @@ export function createInvoiceReturn(data: AppData, invoiceId: string, returnedIt
  const updatedInvoice = { ...invoice, id: updatedId, number: `${invoice.number}-R${relatedReturns + 1}`, date, items: remainingItems.map(item => ({ ...item, id: uid('line') })), totals, initialPaid: totals.paid, paymentStatus: paymentStatus(totals.grandTotal, totals.paid, invoice.paymentMethod), commission, notes: `${invoice.notes}${invoice.notes ? '\n' : ''}Revised after return ${returnNumber}.`, status: 'Completed' as const }
  next.invoices = [updatedInvoice, ...next.invoices.map(entry => entry.id === invoice.id ? { ...entry, status: 'Revised' as const, notes: `${entry.notes}${entry.notes ? '\n' : ''}Revised by ${updatedInvoice.number} after return ${returnNumber}.` } : entry)]
  next.invoiceReturns = [returnRecord, ...(next.invoiceReturns ?? [])]
+ if (invoice.quotationId) next.quotations = next.quotations.map(entry => entry.id === invoice.quotationId && entry.convertedInvoiceId === invoice.id ? { ...entry, convertedInvoiceId: updatedId } : entry)
  if (invoice.customerId) next.customers = next.customers.map(entry => entry.id === invoice.customerId ? { ...entry, balance: roundMoney(Math.max(0, entry.balance + totals.due - invoice.totals.due)), totalPurchase: roundMoney(Math.max(0, entry.totalPurchase + totals.grandTotal - invoice.totals.grandTotal)) } : entry)
  if (invoice.plumberId) {
   const reversedReward = roundMoney(commissionReversed * (next.plumbers.find(entry => entry.id === invoice.plumberId)?.rewardRate ?? 0) / 100)

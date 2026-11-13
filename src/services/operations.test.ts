@@ -1,11 +1,114 @@
 import { describe, expect, it } from 'vitest'
 import { initialData } from '../mock-data'
-import type { Attendance, Invoice, LineItem, Payment, PurchaseInput } from '../types'
+import type { Attendance, Invoice, InvoiceInput, LineItem, Payment, PurchaseInput } from '../types'
 import { calculateInvoiceTotals } from '../utils/invoice'
 import { calculatePayroll } from '../utils/payroll'
-import { adjustStock, createInvoiceReturn, createPurchase, recordReturnRefund } from './operations'
+import { adjustStock, createInvoice, createInvoiceReturn, createPurchase, recordReturnRefund } from './operations'
+
+function billingFixture() {
+ const data = structuredClone(initialData)
+ const product = data.products[0]
+ const customer = { ...data.customers[0], balance: 900, openingBalance: 900, creditLimit: 1000, totalPurchase: 0, bills: 0 }
+ data.products = [product]
+ data.customers = [customer]
+ data.invoices = []
+ data.quotations = []
+ data.stockTransactions = []
+ data.payments = []
+ data.notifications = []
+ data.settings.roundOff = false
+ const input: InvoiceInput = {
+  id: 'bill-draft-regression', date: '2026-11-12T09:00:00Z', customerId: customer.id,
+  items: [{ id: 'bill-line-regression', productId: product.id, name: product.name, variant: product.variant,
+   quantity: 2, unit: product.salesUnit, rate: 100, discount: 0, gst: 0, hsn: '' }],
+  paid: 0, paymentMethod: 'Credit', status: 'Draft',
+ }
+ return { data, product, customer, input }
+}
 
 describe('Vinay Traders accounting regressions', () => {
+ it('checks the full customer balance when completing a draft and books a valid part payment once', () => {
+  const { data, product, customer, input } = billingFixture()
+  const saved = createInvoice(data, input)
+  expect(saved.products[0].stock).toBe(product.stock)
+  expect(saved.customers[0].balance).toBe(customer.balance)
+  expect(saved.stockTransactions).toHaveLength(0)
+  const draftSnapshot = structuredClone(saved)
+  expect(() => createInvoice(saved, { ...input, status: 'Completed' })).toThrow(/Credit limit exceeded/)
+  expect(saved).toEqual(draftSnapshot)
+
+  const completion: InvoiceInput = { ...input, status: 'Completed', paid: 150, paymentMethod: 'UPI' }
+  const completed = createInvoice(saved, completion)
+  expect(completed.invoices[0].totals).toMatchObject({ grandTotal: 200, paid: 150, due: 50, previousBalance: 900 })
+  expect(completed.customers[0]).toMatchObject({ balance: 950, totalPurchase: 200, bills: 1 })
+  expect(completed.products[0].stock).toBe(product.stock - 2)
+  expect(completed.stockTransactions).toHaveLength(1)
+
+  const savedAgain = createInvoice(completed, completion)
+  expect(savedAgain.products[0].stock).toBe(product.stock - 2)
+  expect(savedAgain.customers[0]).toMatchObject({ balance: 950, totalPurchase: 200, bills: 1 })
+  expect(savedAgain.stockTransactions).toHaveLength(1)
+  expect(savedAgain.invoices).toHaveLength(1)
+  expect(savedAgain.invoices[0].number).toBe(saved.invoices[0].number)
+  expect(savedAgain.settings.nextInvoiceNumber).toBe(saved.settings.nextInvoiceNumber)
+ })
+
+ it.each(['Draft', 'Held'] as const)('rejects changing a completed bill back to %s without altering accounting', status => {
+  const { data, input } = billingFixture()
+  const completed = createInvoice(data, { ...input, status: 'Completed', paid: 200, paymentMethod: 'Cash' })
+  const snapshot = structuredClone(completed)
+  expect(() => createInvoice(completed, { ...input, status })).toThrow(/cannot be changed back/)
+  expect(completed).toEqual(snapshot)
+ })
+
+ it.each(['Revised', 'Returned'] as const)('preserves %s bill history after a return', status => {
+  const { data, input } = billingFixture()
+  const completed = createInvoice(data, { ...input, status: 'Completed', paid: 200, paymentMethod: 'Cash' })
+  const returned = createInvoiceReturn(completed, input.id!, [{ lineId: input.items[0].id, quantity: 1 }], true)
+  returned.invoices.find(invoice => invoice.id === input.id)!.status = status
+  const snapshot = structuredClone(returned)
+  expect(() => createInvoice(returned, { ...input, status: 'Completed', paid: 200, paymentMethod: 'Cash' })).toThrow(/Historical returned bills cannot be edited/)
+  expect(returned).toEqual(snapshot)
+ })
+
+ it.each(['Revised', 'Returned'] as const)('requires the return workflow to create a %s bill', status => {
+  const { data, input } = billingFixture()
+  const snapshot = structuredClone(data)
+  expect(() => createInvoice(data, { ...input, status })).toThrow(/sales return workflow/)
+  expect(data).toEqual(snapshot)
+ })
+
+ it('retains a quotation draft identity, date, preparer and source when it is resumed and completed', () => {
+  const { data, product, customer, input } = billingFixture()
+  data.quotations = [{
+   id: 'quotation-draft-source', number: 'QUO-DRAFT-REGRESSION', date: '2026-11-12', validUntil: '2026-11-30',
+   customerId: customer.id, customerName: customer.name, items: structuredClone(input.items),
+   totals: calculateInvoiceTotals(input.items), status: 'Sent', notes: '', createdBy: 'Original preparer',
+  }]
+  const saved = createInvoice(data, { ...input, quotationId: data.quotations[0].id })
+  const original = saved.invoices[0]
+  original.createdBy = 'Original preparer'
+  const resaved = createInvoice(saved, { ...input, date: '2026-11-13T10:00:00Z' })
+  expect(resaved.invoices[0]).toMatchObject({ id: original.id, number: original.number, date: original.date, createdBy: original.createdBy, quotationId: data.quotations[0].id })
+  expect(resaved.quotations[0].status).toBe('Sent')
+  expect(resaved.quotations[0].convertedInvoiceId).toBeUndefined()
+
+  const completed = createInvoice(resaved, { ...input, date: '2026-11-14T11:00:00Z', status: 'Completed', paid: 200, paymentMethod: 'Cash' })
+  expect(completed.invoices).toHaveLength(1)
+  expect(completed.invoices[0]).toMatchObject({ id: original.id, number: original.number, date: original.date, createdBy: original.createdBy, quotationId: data.quotations[0].id, status: 'Completed' })
+  expect(completed.quotations[0]).toMatchObject({ status: 'Converted', convertedInvoiceId: original.id })
+  expect(completed.products[0].stock).toBe(product.stock - 2)
+  expect(completed.stockTransactions).toHaveLength(1)
+  expect(completed.settings.nextInvoiceNumber).toBe(saved.settings.nextInvoiceNumber)
+  expect(() => createInvoice(completed, { ...input, id: 'duplicate-conversion', quotationId: data.quotations[0].id, paid: 200, paymentMethod: 'Cash', status: 'Completed' })).toThrow(/already been converted/)
+  const returned = createInvoiceReturn(completed, original.id, [{ lineId: input.items[0].id, quantity: 1 }], true)
+  const revised = returned.invoices[0]
+  expect(returned.quotations[0].convertedInvoiceId).toBe(revised.id)
+  const revisedSaved = createInvoice(returned, { ...input, id: revised.id, items: revised.items, status: 'Completed', paid: 100, paymentMethod: 'Cash' })
+  expect(revisedSaved.products[0].stock).toBe(product.stock - 1)
+  expect(revisedSaved.quotations[0].convertedInvoiceId).toBe(revised.id)
+ })
+
  it('saves a purchase, preserves its supplier attachment, and increases stock once', () => {
   const before = structuredClone(initialData)
   before.settings.gstEnabled = true // Purchases must still be tax-free in this shop.
