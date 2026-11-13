@@ -6,7 +6,11 @@ export interface Brand { id: string; name: string }
 export interface Category { id: string; name: string; parentId?: string }
 export interface UnitConversion { from: Unit; to: Unit; factor: number }
 export interface ProductVariant { id: string; sku: string; attributes: Record<string, string>; size: string; length?: string; colour?: string }
-export interface ProductBarcode { value: string; unit: Unit; label?: string; createdAt?: string }
+export interface ProductBarcode {
+ value: string; unit: Unit; label?: string; createdAt?: string; quantity?: number
+ template?: 'Standard' | 'With Price' | 'Compact' | 'Shelf Label'; size?: string; sheetType?: string
+ includePrice?: boolean; notes?: string
+}
 export interface InventoryBatch { id: string; batchNumber: string; productId: string; date: string; originalPurchaseQty: number; purchaseUnit: Unit; conversionFactor: number; convertedQty: number; salesUnit: Unit; soldQty: number; remainingQty: number; purchaseRate: number; rollNumber?: string; width?: number; length?: number; weight?: number; wastage?: number }
 export interface Product {
  id: string; name: string; brand: string; category: string; subcategory?: string; productFamily?: string; sku: string; barcode: string; barcodes?: ProductBarcode[]; defaultDiscount?: number; hsn: string; gst: number;
