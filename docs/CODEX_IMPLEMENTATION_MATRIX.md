@@ -20,7 +20,7 @@
 | 10 Plumbers | Partner directory, referrals, commissions, reward jar, payout, return adjustment | Verify mobile/name search, commission calculations and payout; partially returned bills and overpaid carry-forward; PDF reports. | Plumber boards and 6 report samples | `e6837e7` | IN PROGRESS |
 | 11 Workers/payroll | Worker profile, attendance, salary history, period bonus, payment, PDF payslip | Verify monthly/daily wages, bonus interval boundaries, advances/deductions, repeated/partial payment, zero remaining after settlement, historical payroll and A4 payslip. | Worker/payroll boards and payslip samples | `a4a5987` | IN PROGRESS |
 | 12 Attendance | Daily attendance confirmation, monthly matrix/summary | Verify date selection, status edits, month boundary, no unintended future attendance, payroll impact and A4 reports. | Attendance boards and report sample | `a4a5987` | IN PROGRESS |
-| 13 Pat Sanstha | Multiple named deposit plans, separate daily amounts, plan-specific entries and reports | Verify two deposits on one date for distinct plans, duplicate same-plan guard, edits affecting only future expected values, daily/weekly/monthly totals, A4. | Pat Sanstha boards and PDF sample | `e6837e7` | IN PROGRESS |
+| 13 Pat Sanstha | Multiple named deposit plans, separate daily amounts, plan-specific entries and reports | Desktop/mobile verifies two plans depositing separately on one date, old expected amounts remain fixed after a plan rate change, and daily/weekly/monthly A4 report totals. Confirm same-plan edit behavior and more period-boundary cases. | Pat Sanstha boards and PDF sample | `07c7bae` | IN PROGRESS |
 | 14 Returns | Original/revised bill, return lines, stock restore, refund and commission adjustment | Partial return passes on desktop/mobile with stock, customer, plumber commission, and refund reconciliation plus branded A4 comparison PDF. Verify full return, repeated-return cap, restock toggle, and broader ledger cases. | Return requirements and Bill reference | `45c7b43` | IN PROGRESS |
 | 15 Expenses | Personal/shop entry types, ledger, separate and overall PDF actions | Verify create/edit/delete, date and type search, totals, payment method, reports and persistence. | Dashboard/report reference; A4 manual | `e6837e7` | IN PROGRESS |
 | 16 Dashboard, reports and shell | Dashboard analytics, period exports, notifications, settings, navigation; legacy reports route removed | Verify local-time period boundaries, filters, navigation, notification read state, role/settings behavior, responsive shell and no unintended report page. | Dashboard/UI boards; A4 manual | `e6837e7` | IN PROGRESS |
@@ -57,3 +57,12 @@ Visual captures from the baseline run remain in ignored `test-results/`. Do not 
 - Returns E2E: partial line return, revised bill, stock restoration, customer balance, plumber referral/commission adjustment, refund record, and A4 before/after PDF passed on desktop and mobile. Preview includes commission reversed and refund recorded/due; see `output/pdf/verification-2026-11-13/return-comparison-fixture-a4.pdf` and its PNG preview.
 - Source/test changes and all supplied `codex-handoff/` references and `output/pdf/` verification fixtures/previews were committed as `45c7b43` and pushed to `origin/main`.
 - Not attempted: production data access, Supabase security changes, production deployment, Windows installer/portable verification, or physical printer verification.
+
+## Current focused verification records (`07c7bae` checkpoint)
+
+- `npm run lint`: pass, zero warnings.
+- `npm test`: pass, 9 tests across two Vitest files.
+- `npx playwright test --workers=2`: pass, 34 desktop/mobile Chromium tests.
+- Pat Sanstha browser coverage creates two plan-specific daily amounts, records each plan on the same date, confirms an edited plan rate does not rewrite earlier expected amounts, and exports Daily, Weekly, and Monthly reports. A4 landscape dimensions and period totals were checked in the fixture PDFs; the logo, table, and totals were visually reviewed in their PNG previews.
+- Added `tests/e2e/pat-sanstha.spec.ts` and the three isolated A4 report fixtures/previews, committed and pushed as `07c7bae`.
+- No installer, production data mutation, Supabase security change, printer test, or production deployment was attempted.

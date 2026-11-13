@@ -57,6 +57,19 @@ The quotation and returns workflows now have desktop/mobile end-to-end coverage.
 
 The source/test changes and handoff references plus reviewed PDF fixtures were committed as `45c7b43` and pushed to `origin/main`. Source changes in this checkpoint: `src/utils/pdf.ts`, `tests/e2e/quotations.spec.ts`, and `tests/e2e/returns.spec.ts`. The generated PDFs and their preview PNGs are under `output/pdf/verification-2026-11-13/` and `output/pdf/previews/verification-2026-11-13-updated/`. PDFs contain isolated test data, not the owner's saved records. `codex-handoff/` now holds the reviewed manuals, images, prompts, and supplied print samples.
 
+## Current implementation checkpoint (`07c7bae` on `main`, based on `7d44a7c`)
+
+Pat Sanstha now has desktop/mobile end-to-end verification for creating two separately priced plans, recording both plans on the same date, updating a plan amount without altering prior expected values, and exporting daily, weekly, and monthly reports. The exported report fixtures were text-checked for A4 landscape dimensions, reporting-period rows, and totals, then rendered and visually reviewed.
+
+| Check | Current result | Evidence / limit |
+| --- | --- | --- |
+| `npm run lint` | Pass, zero warnings | Includes the new Pat Sanstha browser test |
+| `npm test` | Pass, 9 tests | Two Vitest files |
+| `npx playwright test --workers=2` | Pass, 34 desktop/mobile Chromium tests | Full suite including all prior checks and Pat Sanstha plan/report coverage |
+| Pat Sanstha reports | Pass for isolated fixtures | Daily, weekly, monthly are all one-page A4 landscape PDFs with logo and correct report-period totals. PDFs and previews are in the verification folders listed above. |
+
+`tests/e2e/pat-sanstha.spec.ts` and its six generated report/preview fixtures were committed as `07c7bae` and pushed to `origin/main`. Full production data, migration, printer, and release gates remain unverified.
+
 ## Phase status
 
 | Phase | Status | Commit | Current checkpoint |
@@ -74,7 +87,7 @@ The source/test changes and handoff references plus reviewed PDF fixtures were c
 | 10 Plumbers | IN PROGRESS | `e6837e7` | Referral, commission, reward and payment history exist. Return reversal/carry-forward acceptance remains. |
 | 11 Workers / payroll | IN PROGRESS | `a4a5987` | Desktop/mobile tests verify settlement zeroes remaining base pay and preserves payment history, and bonus amount/date bounds persist. Broader pay-cycle, partial payment and payslip cases remain. |
 | 12 Attendance | IN PROGRESS | `a4a5987` | Desktop/mobile monthly bulk test preserves recorded statuses and skips future dates. Daily/month grid editing, leave, payroll links and A4 reports remain. |
-| 13 Pat Sanstha | IN PROGRESS | `e6837e7` | Multiple plans and plan-specific amounts exist. Same-day plan entries and period reports need end-to-end review. |
+| 13 Pat Sanstha | IN PROGRESS | `07c7bae` | Desktop/mobile test verifies two plan-specific amounts on one date, past expected values remain unchanged after a plan rate change, and daily/weekly/monthly A4 report totals. Duplicate edit semantics and extended period boundaries remain. |
 | 14 Returns | IN PROGRESS | `45c7b43` | Desktop/mobile partial return verifies stock reversal, customer and plumber commission adjustment, refund payment, and a branded A4 before/after PDF. Full return, repeat-return caps, restock-off, and broader settlement cases remain. |
 | 15 Expenses | IN PROGRESS | `e6837e7` | Personal/shop classification and three export actions exist. CRUD, date filters and totals remain to verify. |
 | 16 Dashboard / shared operations | IN PROGRESS | `e6837e7` | Dashboard, settings, notifications and report exports exist. All period boundaries, navigation and device views remain to verify. |
