@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { AlertTriangle, ArrowLeft, BarChart3, Barcode as BarcodeIcon, CalendarDays, Check, CheckCircle2, ClipboardList, Edit3, IndianRupee, Package, Plus, Save, SlidersHorizontal, Users, Wallet, X } from 'lucide-react'
@@ -29,7 +29,7 @@ function SearchSelect({ value, onChange, options, ariaLabel, placeholder }: { va
  const selected = options.find(option => option.value === value)
  const [query, setQuery] = useState(selected?.label ?? '')
  const listId = `search-${ariaLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
- return <div className="search-select"><input aria-label={ariaLabel} list={listId} value={query} placeholder={placeholder} onChange={event => { const next = event.target.value; setQuery(next); const match = options.find(option => option.label.toLowerCase() === next.toLowerCase()); if (match) onChange(match.value) }} /><datalist id={listId}>{options.map(option => <option key={option.value} value={option.label} />)}</datalist></div>
+ return <div className="search-select"><input aria-label={ariaLabel} list={listId} value={query} placeholder={placeholder} onChange={event => { const next = event.target.value; setQuery(next); const match = options.find(option => option.label.toLowerCase() === next.trim().toLowerCase()); onChange(match?.value ?? '') }} /><datalist id={listId}>{options.map(option => <option key={option.value} value={option.label} />)}</datalist></div>
 }
 
 function DateInput({ value, onChange, ariaLabel }: { value: string; onChange: (value: string) => void; ariaLabel: string }) {
@@ -53,9 +53,9 @@ function ProductEditor({product,onClose}:{product?:Product;onClose:()=>void}) {
     purchaseRate:product?.purchaseRate??0,sellingRate:product?.sellingRate??0,
     stock:product?.stock??0,reorderLevel:product?.reorderLevel??10,defaultDiscount:product?.defaultDiscount??0,
   }})
-  const purchaseRate=Number(form.watch('purchaseRate'))||0
-  const sellingRate=Number(form.watch('sellingRate'))||0
-  const discount=Number(form.watch('defaultDiscount'))||0
+  const purchaseRate=Number(useWatch({control:form.control,name:'purchaseRate'}))||0
+  const sellingRate=Number(useWatch({control:form.control,name:'sellingRate'}))||0
+  const discount=Number(useWatch({control:form.control,name:'defaultDiscount'}))||0
   const netSelling=sellingRate*(1-discount/100)
   const margin=netSelling-purchaseRate
   const marginPercent=purchaseRate>0?margin/purchaseRate*100:0

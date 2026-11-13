@@ -58,13 +58,13 @@ function currentPageNumber(doc: jsPDF) {
 function download(doc: jsPDF, title: string) { doc.save(`${safeFilename(title)}-${new Date().toISOString().slice(0, 10)}.pdf`) }
 
 /** Download a branded A4 landscape register with repeated table headings and readable values. */
-export async function printPdfReport(title: string, rows: PdfRow[], details?: ReportDetails, options: { orientation?: 'portrait' | 'landscape'; summary?: PdfRow; outputName?: string; columnWidths?: number[] } = {}) {
+export async function printPdfReport(title: string, rows: PdfRow[], details?: ReportDetails, options: { orientation?: 'portrait' | 'landscape'; summary?: PdfRow; outputName?: string; columnWidths?: number[]; reserveSummarySpace?: boolean } = {}) {
  const shop = { businessName: 'VINAY TRADERS', address: 'Shirala, Maharashtra', ...details }
  const orientation = options.orientation ?? 'landscape'
  const doc = new jsPDF({ orientation, unit: 'mm', format: 'a4' }), logo = await logoData()
  const { width, margin, startY } = brandHeader(doc, title, shop, orientation === 'landscape', logo)
  const columns = Object.keys(rows[0] ?? {})
- if (columns.length) autoTable(doc, { startY, head: [columns], body: rows.map(row => columns.map(column => displayValue(row[column]))), styles: { fontSize: orientation === 'landscape' ? 8 : 8.5, cellPadding: 2.2, overflow: 'linebreak', textColor: [31, 41, 55], lineColor: [205, 215, 227], lineWidth: .2 }, columnStyles: Object.fromEntries((options.columnWidths??[]).map((cellWidth,index)=>[index,{cellWidth}])), headStyles: { fillColor: blue, textColor: [255, 255, 255], fontStyle: 'bold' }, alternateRowStyles: { fillColor: [245, 248, 252] }, margin: { left: margin, right: margin, top: startY, bottom: 16 }, didParseCell: cell => { if (cell.section !== 'body' || columns[cell.column.index] !== 'Status') return; const status = String(cell.cell.raw ?? '').toLowerCase(); if (['paid', 'settled', 'success'].includes(status)) { cell.cell.styles.fillColor = [226, 248, 234]; cell.cell.styles.textColor = [22, 112, 67] } else if (['partial', 'pending'].includes(status)) { cell.cell.styles.fillColor = [255, 244, 218]; cell.cell.styles.textColor = [153, 93, 0] } else if (['due', 'unpaid', 'credit'].includes(status)) { cell.cell.styles.fillColor = [255, 232, 232]; cell.cell.styles.textColor = [165, 36, 36] } }, theme: 'grid', showHead: 'everyPage', willDrawPage: () => { if (currentPageNumber(doc) > 1) brandHeader(doc, title, shop, orientation === 'landscape', logo) } })
+ if (columns.length) autoTable(doc, { startY, head: [columns], body: rows.map(row => columns.map(column => displayValue(row[column]))), styles: { fontSize: orientation === 'landscape' ? 8 : 8.5, cellPadding: orientation === 'landscape' ? 1.2 : 2.2, overflow: 'linebreak', textColor: [31, 41, 55], lineColor: [205, 215, 227], lineWidth: .2 }, columnStyles: Object.fromEntries((options.columnWidths??[]).map((cellWidth,index)=>[index,{cellWidth}])), headStyles: { fillColor: blue, textColor: [255, 255, 255], fontStyle: 'bold' }, alternateRowStyles: { fillColor: [245, 248, 252] }, margin: { left: margin, right: margin, top: startY, bottom: options.reserveSummarySpace ? 39 : 16 }, didParseCell: cell => { if (cell.section !== 'body' || columns[cell.column.index] !== 'Status') return; const status = String(cell.cell.raw ?? '').toLowerCase(); if (['paid', 'settled', 'success'].includes(status)) { cell.cell.styles.fillColor = [226, 248, 234]; cell.cell.styles.textColor = [22, 112, 67] } else if (['partial', 'pending'].includes(status)) { cell.cell.styles.fillColor = [255, 244, 218]; cell.cell.styles.textColor = [153, 93, 0] } else if (['due', 'unpaid', 'credit'].includes(status)) { cell.cell.styles.fillColor = [255, 232, 232]; cell.cell.styles.textColor = [165, 36, 36] } }, theme: 'grid', showHead: 'everyPage', willDrawPage: () => { if (currentPageNumber(doc) > 1) brandHeader(doc, title, shop, orientation === 'landscape', logo) } })
  else { doc.setTextColor(91, 100, 114); doc.setFontSize(11); doc.text('No records found for this report.', margin, startY + 5) }
  if (options.summary && Object.keys(options.summary).length) {
   const y = (doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? startY
@@ -75,7 +75,14 @@ export async function printPdfReport(title: string, rows: PdfRow[], details?: Re
    brandHeader(doc, title, shop, orientation === 'landscape', logo)
    summaryY = startY
   }
-  autoTable(doc, { startY: summaryY, body: Object.entries(options.summary).map(([key, value]) => [key, displayValue(value)]), theme: 'plain', styles: { fontSize: 9, cellPadding: 2.5, fontStyle: 'bold' }, columnStyles: { 0: { cellWidth: width * .27, textColor: blue }, 1: { halign: 'right' } }, margin: { left: margin, right: margin } })
+  autoTable(doc, { startY: summaryY, body: Object.entries(options.summary).map(([key, value]) => [key, displayValue(value)]), theme: 'plain', styles: { fontSize: options.reserveSummarySpace ? 8 : 9, cellPadding: options.reserveSummarySpace ? 1.3 : 2.5, fontStyle: 'bold' }, columnStyles: { 0: { cellWidth: width * .27, textColor: blue }, 1: { halign: 'right' } }, margin: { left: margin, right: margin } })
+ }
+ // Reapply the branded header after pagination, including any summary-only
+ // continuation page added after the table reaches the bottom of A4.
+ const reportPages = doc.getNumberOfPages()
+ for (let page = 1; page <= reportPages; page++) {
+  doc.setPage(page)
+  brandHeader(doc, title, shop, orientation === 'landscape', logo)
  }
  footer(doc, shop); download(doc, options.outputName ?? title)
 }
@@ -109,7 +116,9 @@ export async function purchaseInvoicePdf(purchase: Purchase, supplier: Supplier 
  autoTable(doc, { startY: cardTop + cardHeight + 6, head: [['Sr.', 'Product', 'Variant / Size', 'Qty', 'Unit', 'Rate', 'Discount', 'Amount']], body: items.map((item, i) => [i + 1, item.name, item.variant || '—', item.quantity, item.unit, pdfCurrency(item.rate), `${item.discount || 0}%`, pdfCurrency(item.quantity * item.rate * (1 - (item.discount || 0) / 100))]), styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak', lineColor: [205, 215, 227], lineWidth: .2 }, headStyles: { fillColor: blue, textColor: [255, 255, 255], fontStyle: 'bold' }, alternateRowStyles: { fillColor: [246, 249, 253] }, columnStyles: { 0: { cellWidth: 9 }, 1: { cellWidth: 39 }, 2: { cellWidth: 30 }, 3: { cellWidth: 13, halign: 'right' }, 4: { cellWidth: 14 }, 5: { cellWidth: 23, halign: 'right' }, 6: { cellWidth: 18, halign: 'right' }, 7: { halign: 'right' } }, margin: { left: margin, right: margin, top: 54, bottom: 16 }, showHead: 'everyPage', willDrawPage: () => { if (currentPageNumber(doc) > 1) brandHeader(doc, 'Purchase Invoice', shop, false, logo, `Purchase ${purchase.number}  ·  ${formatDate(purchase.invoiceDate || purchase.date)}`) } })
  let y = ((doc as jsPDF & { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? 100) + 7
  const totals = purchase.totals ?? { subtotal: 0, discount: 0, grandTotal: 0, paid: 0, due: 0 }
- if (y > 245) { doc.addPage(); brandHeader(doc, 'Purchase Invoice', shop, false, logo, `Purchase ${purchase.number}  ·  ${formatDate(purchase.invoiceDate || purchase.date)}`); y = 60 }
+ // Keep the summary, remarks and signature block together instead of leaving
+ // only remarks/signatures stranded at the bottom of a mostly empty page.
+ if (y + 55 > 250) { doc.addPage(); brandHeader(doc, 'Purchase Invoice', shop, false, logo, `Purchase ${purchase.number}  ·  ${formatDate(purchase.invoiceDate || purchase.date)}`); y = 60 }
  const x = width - margin - 77
  doc.setDrawColor(198, 211, 227); doc.roundedRect(x, y, 77, 40, 2, 2)
  const summary = [['Subtotal', totals.subtotal], ['Discount', totals.discount], ['Grand total', totals.grandTotal], ['Paid', totals.paid], ['Due', totals.due]] as const
@@ -122,6 +131,13 @@ export async function purchaseInvoicePdf(purchase: Purchase, supplier: Supplier 
  const signatureY = 264, lineWidth = (width - 2 * margin - 24) / 2
  doc.setDrawColor(128, 141, 159); doc.line(margin, signatureY, margin + lineWidth, signatureY); doc.line(width - margin - lineWidth, signatureY, width - margin, signatureY)
  doc.setFontSize(7.5); doc.setTextColor(70, 80, 93); doc.text('Prepared by: Vinay Traders', margin + lineWidth / 2, signatureY + 5, { align: 'center' }); doc.text('Authorized signature', width - margin - lineWidth / 2, signatureY + 5, { align: 'center' })
+ // Draw headers after autoTable has finished pagination. This keeps manually
+ // added continuation pages branded consistently with table continuation pages.
+ const pageCount = doc.getNumberOfPages()
+ for (let page = 1; page <= pageCount; page++) {
+  doc.setPage(page)
+  brandHeader(doc, 'Purchase Invoice', shop, false, logo, `Purchase ${purchase.number}  ·  ${formatDate(purchase.invoiceDate || purchase.date)}`)
+ }
  footer(doc, shop); download(doc, `purchase-invoice-${purchase.number}`)
 }
 
@@ -142,7 +158,7 @@ export async function purchaseRegisterPdf(rows: PdfRow[], details: ReportDetails
    Status: due <= 0 ? 'Paid' : paid > 0 ? 'Partial' : 'Due',
   }
  })
- return printPdfReport('Purchase Register', printableRows, details, { orientation: 'landscape', columnWidths: [10,28,22,36,39,17,29,26,26,18], summary: { 'Total records': rows.length, 'Total amount': pdfCurrency(sum('Grand total')), 'Total paid': pdfCurrency(sum('Paid')), 'Total due': pdfCurrency(sum('Due')) } })
+ return printPdfReport('Purchase Register', printableRows, details, { orientation: 'landscape', columnWidths: [10,28,22,36,39,17,29,26,26,18], reserveSummarySpace: true, summary: { 'Total records': rows.length, 'Total amount': pdfCurrency(sum('Grand total')), 'Total paid': pdfCurrency(sum('Paid')), 'Total due': pdfCurrency(sum('Due')) } })
 }
 
 export async function productPurchaseReportPdf(products: Product[], details: ReportDetails) {

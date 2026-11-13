@@ -1,15 +1,21 @@
 # Vinay Traders — Implementation & Release Status
 
-Checked against the GitHub \`main\` branch on **13 November 2026**. This is a status report, not a production sign-off. Source presence and passing unit tests do not replace testing each workflow in Windows, web and Supabase.
+Checked against the local \`main\` checkout at \`e6837e7\` on **13 November 2026**. This is a status report, not a production sign-off. Source presence and passing unit tests do not replace testing each workflow in Windows, web and Supabase. See \`docs/CODEX_PROGRESS.md\` and \`docs/CODEX_IMPLEMENTATION_MATRIX.md\` for the current audited baseline and phase gates.
+
+## Latest local verification checkpoint
+
+The current working tree contains additional, uncommitted purchase, inventory, attendance and payroll fixes based on `e6837e7`. `npm run lint`, the Vite production build, `npm test` (9 tests), and the complete Playwright suite (28 desktop/mobile Chromium tests) pass. Purchase PDF fixtures were generated as A4 documents with 1, 20 and 100 row pagination cases; product report amounts and totals were checked across all 71 pages. See preview PNGs in `output/pdf/previews/verification-2026-11-13-updated/` and fixture PDFs in `output/pdf/verification-2026-11-13/`.
+
+This checkpoint is not a Windows installer test or production release. Marathi font fidelity, real printer output, comparison against saved owner records, and remaining phase acceptance checks are outstanding.
 
 ## Implemented or improved in this development cycle
 
-- [x] Phase 00: GitHub source review; consolidated \`development\` into \`main\`, removed old branches.
+- [ ] Phase 00: Repository, references and local checks reviewed; database backup/restore and 4-viewport baseline evidence still outstanding.
 - [x] Phase 01 (partial): Consistent shared theme tokens, typography, navigation styles, focus states, accessible sort controls, dark/system appearance, number-wheel protection.
 - [x] Phase 01 (partial): Cloud sign-in gate and sign-out, safe revision-checked cloud data writes and conflict warning.
 - [ ] Phase 01 security cutover: **Blocked until owner account, backup and manual RLS cutover have been verified**. Old permissive \`vt_*\` policies may still be active on production.
 - [x] Phase 02 (source): Supplier invoice PDF/image validation and preview in purchase editor/detail, purchase register, supplier lookup.
-- [x] Phase 03 (source): Product supplier/category linkage, price/discount margin and supplier filtering.
+- [x] Phase 03 (source): Product supplier/category linkage, price/discount margin and supplier filtering. The four user-supplied 2021 PDFs have now been found and their 1,528 source-attributed, zero-stock catalogue rows are in \`src/assets/price-list-catalog.json\`; source reconciliation and current-price confirmation are outstanding.
 - [x] Phase 04: A4 vector quotation PDF generator (replaces screenshot slicing); date search is in the quotation register.
 - [ ] Phase 04: Screenshot-by-screenshot A4 PDF print-preview verification, including unusually long quotation tables.
 - [ ] Phase 05: Barcode printer compatibility and device testing not verified.
@@ -37,18 +43,14 @@ Checked against the GitHub \`main\` branch on **13 November 2026**. This is a st
 
 ## Design references
 
-The user has supplied visual references and two combined A4 guides:
-- \`01_UI_Redesign_Exact_Visual_References.pdf\` — 21 pages.
-- \`02_All_A4_PDF_Format_References.pdf\` — 15 pages.
-
-These files live in the ChatGPT artifact package, **not inside the GitHub repository**. Design acceptance should compare at least 1366×768 desktop, 1024 tablet, and 375 mobile viewports, in light and dark modes.
+The reviewed design references, 26-page UI manual, A4 PDF manual, visual board and print samples are in \`codex-handoff/\`. All reference pages and image files were visually reviewed for this cycle. Design acceptance should compare at least 1366×768 desktop, 1024 tablet, 375 mobile and 320 mobile viewports, in light and dark modes.
 
 ## Known blockers
 
 1. **Security:** Production Supabase RLS still needs the verified manual authorization cutover in \`docs/security/README.md\`. Web deployment must wait.
 2. **Data integrity:** Optimistic-lock conflict handling prevents silent overwrites but a user-facing merge/reconciliation flow is still needed for truly multi-user sync.
 3. **Cross-device Windows:** The default desktop build is a local offline workspace. A separate authenticated cloud-desktop mode exists, but must not be released without Supabase owner/RLS and desktop authentication tests.
-4. **Inventory catalog:** All product PDFs requested by the user must be supplied in machine-readable or visually reviewable form and imported with source-by-source reconciliation. No missing products should be guessed or fabricated.
+4. **Inventory catalog:** The four 2021 price lists were located in the user's Downloads folder and imported with source references, historical pricing and zero stock. Reconcile extracted rows against each original page and obtain current price/stock confirmation before live purchasing. Do not invent or infer missing records.
 5. **UI exactness:** Code compilation does not establish exact visual match or functional UI test coverage.
 6. **PDF printing:** Real multi-page A4 output with long product names, rows, and Marathi Unicode text requires live visual test passes.
 7. **Local file destination:** GitHub Actions cannot write directly into the user's \`D:\vinay-traders\vinay-traders\re fin\` directory. Download the build artifact and extract/install it on the Windows machine.
